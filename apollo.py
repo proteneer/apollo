@@ -1,5 +1,9 @@
 from functools import wraps
 import types
+import redis
+
+rc = redis.Redis()
+rc.flushdb()
 
 def check_field(func):
     @wraps(func)
@@ -66,65 +70,23 @@ class Object(metaclass=_modify_derived):
 
     # 1-to-1 relationship
     apollo.relate(Cat,'person_soulmate',Person,'cat_soulmate')
-
-    # relate does the following:
-    #   Cat.fields['person_soulmate'] = Person
-    #   Person.fields['cat_soulmate'] = Cat
-    
-    # sphinx['person_soulmate'] = 'joe'
-    # the following commands are executed
-    #   if 'person_soulmate' in Cat.relations:
-    #       
-    #       ObjectType = Cat.relations['person_soulmate'][0]
-    #       FieldName = Cat.relations['person_soulmate'][1]
-    #       FieldType = ObjectType.fields[FieldName]
-    #       instance = ObjectType.instance('joe')
-    #       if not FieldType in (set,tuple,list):
-    #           instance[FieldName] = sphinx.id
-    #       elif FieldType is set:
-    #           instance.sadd('FieldName',sphinx.id)
-    #       elif FieldType
-    
-    # define relations explicitly
     
     # 1-to-n relationship
-    # a person's list of minions is related to a person's boss
     apollo.relate(Person,{'minions'},Person,'boss')
     
-    # Person.fields['minion'] = {Person}
-    # Person.fields['boss'] = Person
-    
     # n-to-n relationship
-    apollo.relate(Person,{'cats_to_feed'},Cat,{'caretakers'})
-    
-    # usage:
-    joe = Person.create('joe')
-    jamie = Person.create('jamie')
-    jack = Person.create('jack')
-
-    joe['minions'] = {'jamie','jack'}
-    jamie['boss'] # returns 'joe'
-    jack['boss'] # returns 'joe'
-
-    sphinx = Cat.create('sphinx')
-    sphinx.caretakers = {'joe','jamie'}
-    felix = Cat.create('felix')
-    felix.caretakers = {'jamie','jack'}
-
-    joe['cats_to_feed'] # returns {'sphinx'}
-    jamie['cats_to_feed'] # returns {'sphinx','felix'}
-    jack['cats_to_feed'] # returns {'felix'}
+    apollo.relate(Person,{'cats_to_feed'},Cat,{'caretakers'}
     '''
 
-    lookups = []
-    relations = {}
-
     def _str_to_class(class_string):
-        
         for some_subclass in self.__subclasses__():
             if some_subclass.__name__ == class_string:
                 return some_subclass
-    
+            
+    @classmethod
+    def exists(cls,id,db):
+        return db.sismember(cls.prefix+'s',id)
+  
     @classmethod
     def create(cls,id,db):
         if isinstance(id,bytes):
@@ -135,8 +97,8 @@ class Object(metaclass=_modify_derived):
         return cls(id,db)
 
     @classmethod
-    def instance(cls,*args,**kwargs):
-        return cls(id,*args,**kwargs)
+    def instance(cls,id,db):
+        return cls(id,db)
 
     @classmethod
     def delete(cls,id,db):
@@ -162,15 +124,33 @@ class Object(metaclass=_modify_derived):
             pass
         elif self.fields[field] is tuple:
             pass
-        else:
+        elif issubclass(self.fields[field],Object):
+            assert(isinstance(value,str))
+            if field in self.relations:
+                object_type = self.relations[field][0]
+                field_name = self.relations[field][1]
+                field_type = object_type.fields[field_name]
+                # see if it exists
+                instance = object_type.instance(value, self._db)
+                if not field_type in (set,tuple,list):
+                    self._db.hset(object_type.prefix+':'+value,field_name,self._id)
+                    # infinite loops instance[field_name] = self._id
+                elif field_type is set:
+                    pass
+                elif field_type is tuple:
+                    pass
             self._db.hset(self.__class__.prefix+':'+self._id, field, value)
-
-    def __init__(self,id,db,verify=False):
+        else:
+            print('debug')
+            self._db.hset(self.__class__.prefix+':'+self._id, field, value)
+            
+    def __init__(self,id,db):
         self._db = db
         self._id = id
         self.delete = types.MethodType(_instance_delete,self)
         # overhead
-        if verify:
-            if not self.__class__.exists(id,db):
-                raise KeyError(id,'has not been created yet')
+        print('instancing ', id)
+        
+        if not self.__class__.exists(id,db):
+            raise KeyError(id,'has not been created yet')
         self.__dict__['_id'] = id
