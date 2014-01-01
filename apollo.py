@@ -16,64 +16,65 @@ def _instance_delete(instance):
     print('instance_delete_called')
     pass
 
-def relate(objA, fieldA, objB, fieldB):
-    objA.relations[fieldA] = (objB, fieldB)
-    objB.relations[fieldB] = (objA, fieldA)
+def _transfer(type1, field1, type2):
+    if type(field1) is set:
+        for val in field1:
+            field_name = val
+        type1.fields[field_name] = {type2}
+    elif type(field1) is list:
+        field_name = field1[0]
+        type1.fields[field_name] = [type2]
+    elif type(field1) is tuple:
+        field_name = field1[0]
+        type1.fields[field_name] = (type2)
+    else:
+        field_name = field1
+        type1.fields[field_name] = type2
+    return field_name
+    
+def relate(typeA, fieldA, typeB, fieldB=None):
+    field_nameA = _transfer(typeA, fieldA, typeB)
+    if fieldB:
+        field_nameB = _transfer(typeB, fieldB, typeA)
+        typeA.relations[field_nameA] = (typeB, field_nameB)
+        typeB.relations[field_nameB] = (typeA, field_nameA)
 
-class myMc(type):
+class _modify_derived(type):
     def __new__(cls,clsname,bases,attrs):
-        for key in attrs['fields']:
-            print(key)
-            attrs['fields'][key]=Base._str_to_class(attrs['fields'][key])
-        return super(myMc, cls).__new__(cls, clsname, bases, attrs)
-
-class Base(metaclass=myMc):
-    @classmethod
-    def _str_to_class(cls,class_string):
-        for some_subclass in cls.__subclasses__():
-            if some_subclass.__name__ == class_string:
-                return some_subclass
+        if len(bases) > 0:
+            attrs['fields'] = dict()
+            attrs['relations'] = dict()
+        return super(_modify_derived, cls).__new__(cls, clsname, bases, attrs)
     
-    fields = {}
-    
-class Test(Base):
-    fields = {'case' : 'Test'}
-    
-class Object(metaclass=):
+class Object(metaclass=_modify_derived):
     ''' 
-    class Person(apollo.Object):
+    class Person(apollo.Object):    
         prefix = 'person'
         fields = {'ssn' : str,  
                   'email' : str,
-                  'age' : int,
-                  'minions' : {Person},
-                  'boss' : Person,
-                  'favorite_people' : (Person),
-                  'cats_to_feed' : {Cat},
-                  'cat_soulmate' : Cat
-                 }
+                  'age' : int
+                  }
         lookups = {'ssn','email'}
 
     class Cat(apollo.Object):
         prefix = 'cat'
         fields = {'age' : int,
                   'favorite_food' : str,
-                  'biometric_id' : int,
-                  'caretakers' : {Person},
-                  'person_soulmate' : Person
+                  'biometric_id' : int
                  }
         lookups = {'biometric_id'}
 
     # 1-to-1 relationship
     apollo.relate(Cat,'person_soulmate',Person,'cat_soulmate')
 
-    # relate creates the following mapping
-    #   Cat.relations.append('person_soulmate' : (Person, 'cat_soulmate'))
-    #   Person.relations.append('cat_soulmate' : (Cat, 'person_soulmate'))
+    # relate does the following:
+    #   Cat.fields['person_soulmate'] = Person
+    #   Person.fields['cat_soulmate'] = Cat
     
     # sphinx['person_soulmate'] = 'joe'
     # the following commands are executed
     #   if 'person_soulmate' in Cat.relations:
+    #       
     #       ObjectType = Cat.relations['person_soulmate'][0]
     #       FieldName = Cat.relations['person_soulmate'][1]
     #       FieldType = ObjectType.fields[FieldName]
@@ -83,12 +84,18 @@ class Object(metaclass=):
     #       elif FieldType is set:
     #           instance.sadd('FieldName',sphinx.id)
     #       elif FieldType
-
+    
+    # define relations explicitly
+    
     # 1-to-n relationship
-    apollo.relate(Person,'minions',Person,'boss')
-
+    # a person's list of minions is related to a person's boss
+    apollo.relate(Person,{'minions'},Person,'boss')
+    
+    # Person.fields['minion'] = {Person}
+    # Person.fields['boss'] = Person
+    
     # n-to-n relationship
-    apollo.relate(Person,'cats_to_feed',Cat,'caretakers')
+    apollo.relate(Person,{'cats_to_feed'},Cat,{'caretakers'})
     
     # usage:
     joe = Person.create('joe')
@@ -113,6 +120,7 @@ class Object(metaclass=):
     relations = {}
 
     def _str_to_class(class_string):
+        
         for some_subclass in self.__subclasses__():
             if some_subclass.__name__ == class_string:
                 return some_subclass
