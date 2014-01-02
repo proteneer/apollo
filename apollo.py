@@ -5,6 +5,10 @@ import redis
 rc = redis.Redis()
 rc.flushdb()
 
+# supports
+# object to object relations
+# object to primitive relations
+
 def check_field(func):
     @wraps(func)
     def _wrapper(self_cls, field, *args, **kwargs):
@@ -51,15 +55,98 @@ class _modify_derived(type):
         return super(_modify_derived, cls).__new__(cls, clsname, bases, attrs)
     
 class Object(metaclass=_modify_derived):
-    ''' 
+    '''
+    An Object is an entity represented and stored using redis. This class is
+    meant to be subclassed using the example template given below. There are 
+    three major components to an object:
+
+    1. fields - which describes basic features of the object using primitives
+        such as str,int,float,bool
+    2. lookups - which are similar to indices in SQL tables, allowing fast
+        retrieval of the entity id given a field and the field value
+    3. relations - which describe relations between different subclasses of 
+        Object. Relations add additional implicit fields to the object
+
+    both lookups and relations can be 1-to-n or 1-to-1. Only relations may
+    n-to-n. 
+
+
+    With Lookups
+
+    # 1-N
+
+    # forward map:
+    a Person.'cats' field maps to a set of cats
+    # inverse map:
+    a Cat.'owner' field maps to a single person
+    # apollo.relate(Person,{'cats'},Cat,'owner')
+    # forward function: Person,'cats',{Cat}
+    # inverse function: Cat,'owner',Person
+    # (Person,'cats',{Cat},'owner')
+
+    # cyclic form
+    # ({Person},'cats_to_feed',{Cat},'care_takers')
+
+    # (Person,'email',{str})
+
+    # Get a person's emails: Person.instance('joe')['emails']
+    # Usage, Person.lookup('emails','some_email@mail.com')
+
+    # forward function:
+    a Person.'email' field maps to a set of strings
+    # inverse map
+    Person.lookup('email')
+
+    Person.set_lookup('email',{str})
+
+    # Without lookups
+
+
+    # forward map:
+    a Perso
+
     class Person(apollo.Object):    
         prefix = 'person'
-        fields = {'ssn' : str,  
-                  'email' : str,
-                  'age' : int
+        fields = {'ssn' : str,
+                  'age' : int,
+                  'random_hobbies' : {str},
+                  'emails' : (str, injective_lookup)
                   }
-        lookups = {'ssn','email'}
 
+        no_lookups
+
+        injective_lookups
+
+        non_injective_lookups
+
+        ssn = field(str,lookup=True,backref=True)
+
+        _relations = {'cats' : (Cat, owner),
+                      'emails' : str}      
+
+
+    rel = Person.fwd_relation('kids',{Person})
+    rel.back_relation('parents',{Person})
+
+    Person.fwd_relation('cats',{Cat})
+    Cat.back_relation('owner',Person)
+
+    Person.fwd_relation('emails',{str},injective=False)
+    apollo.relate({Person},'emails',{str})
+
+    # with lookup
+    apollo.relate(Person,'emails',{str})
+    # no lookup
+    Person.create_field('cats',{Cat})
+
+    Person.lookup()
+
+
+    # 1-to-n
+    apollo.relate(Person,'emails',{str})
+    # 1-to-1
+    apollo.relate(Person,'email',str)
+    
     class Cat(apollo.Object):
         prefix = 'cat'
         fields = {'age' : int,
@@ -68,14 +155,30 @@ class Object(metaclass=_modify_derived):
                  }
         lookups = {'biometric_id'}
 
-    # 1-to-1 relationship
+    # self relations (implied lookup)
+    # given two person a,b
+    # a \in b['neighbors'] <=> b \in a['neighbors']
+    apollo.relate(Person,{'neighbors'},Person,{'neighbors'})
+
+    # lookup a person given ssn or email
+    Person.lookup('ssn','123-45-6789')
+    Person.lookup('email','fantasy@gmail.com')
+
+    # 1-to-1 relationship)
     apollo.relate(Cat,'person_soulmate',Person,'cat_soulmate')
     
+    # 1-to-1 relationship
+    apollo.relate(Person,'husband',Person,'wife')
+
     # 1-to-n relationship
-    apollo.relate(Person,{'minions'},Person,'boss')
-    
+    apollo.relate(Person,{'employees'},Person,'boss')
+
+    # 1-to-n with no reverse lookup needed
+    apollo.relate(Person,{'random_cats'},Cat)
+
     # n-to-n relationship
-    apollo.relate(Person,{'cats_to_feed'},Cat,{'caretakers'}
+    apollo.relate(Person,{'cats_to_feed'},Cat,{'caretakers'})
+
     '''
 
     def _str_to_class(class_string):
@@ -105,6 +208,10 @@ class Object(metaclass=_modify_derived):
         print('classmethod delete:',cls,id,db)
         pass
 
+    @property
+    def id(self):
+        return self._id
+
     @check_field 
     def __getitem__(self, field):
         if self.fields[field] is set:
@@ -118,6 +225,59 @@ class Object(metaclass=_modify_derived):
 
     @check_field
     def __setitem__(self, field, value):
+        ''' Set the object's field equal to that of value.
+
+            Logic:
+                                        |
+                              is field a container?
+                                |               |
+                               yes              no
+                                |               |
+                              is field a primitive?
+                                |               |
+                               yes              no
+                                |               |
+                does a previous lookup/relation already exist?
+                                |               |
+                               yes              no
+                                |               |
+                        is it a lookup?  is it a relation?
+                        |       |               |       |
+                       yes      no             yes      no 
+                        |                       |
+                      1-to-n      is the relation a container?
+                                        |               |
+                                       yes              no
+                                        |               |
+                                      n-to-n          1-to-n
+                                                
+
+                        
+        '''
+        # is field a container?
+        if type(self.fields[field]) in (set,list,tuple):
+            pass
+        else:
+            # is field a primitive?
+            if self.fields[field] in (str,float,int,bool):
+                self._db.hset(self.prefix+':'+self._id,field,value)
+                # is it a lookup?
+                if field in self.lookups:
+                    
+                    # is the referenced lookup a container?
+                    if self.fields[field]
+                else:
+                    pass
+            elif issubclass(self.fields[field],Object):
+                if isinstance(value,Object):
+                    value_id = value.id
+                else:
+                    value_id = value
+                self._db.hset(self.prefix+':'+self._id,field,value_id)
+                # is it a lookup?
+            else:
+                raise TypeError('unknown field mapping') 
+
         if self.fields[field] is set:
             pass
         elif self.fields[field] is list:
@@ -125,13 +285,15 @@ class Object(metaclass=_modify_derived):
         elif self.fields[field] is tuple:
             pass
         elif issubclass(self.fields[field],Object):
-            assert(isinstance(value,str))
+            assert isinstance(value,str) or isinstance(value,Object)
             if field in self.relations:
                 object_type = self.relations[field][0]
                 field_name = self.relations[field][1]
                 field_type = object_type.fields[field_name]
-                # see if it exists
-                instance = object_type.instance(value, self._db)
+                if isinstance(value,Object):
+                    object_id = value.id
+                if not object_type.exists(object_id, self._db):
+                    raise ValueError('object '+object_id+' does not exist in '+object_type)
                 if not field_type in (set,tuple,list):
                     self._db.hset(object_type.prefix+':'+value,field_name,self._id)
                     # infinite loops instance[field_name] = self._id
