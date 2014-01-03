@@ -54,26 +54,47 @@ class _modify_derived(type):
             attrs['relations'] = dict()
         return super(_modify_derived, cls).__new__(cls, clsname, bases, attrs)
     
-class Object(metaclass=_modify_derived):
+class Entity(metaclass=_modify_derived):
     '''
-    An Object is an entity represented and stored using redis. This class is
-    meant to be subclassed using the example template given below. There are 
-    three major components to an object:
+    An Entity is an entity represented and stored using redis. This class is
+    meant to be subclassed using the example template given below. The ids of
+    the Entitys that exist are contained in a redis SET. There are three major 
+    components to an Entity:
 
-    1. fields - which describes basic features of the object using primitives
-        such as str,int,float,bool
+    1. fields - which describes basic features of the Entity using primitives
+        such as str,int,float,bool. They can be bracketed in {},[],() to denote
+        a redis SET, a redis LIST, and a redis SORTED SET. 
     2. lookups - which are similar to indices in SQL tables, allowing fast
-        retrieval of the entity id given a field and the field value
+        retrieval of the entity id given a field and the field value. Lookups
+        are added via the Entity.add_lookup() method, and is injective by
+        default. 
     3. relations - which describe relations between different subclasses of 
-        Object. Relations add additional implicit fields to the object
+        Entity. Relations add additional implicit fields to the Entity
 
-    both lookups and relations can be 1-to-n or 1-to-1. Only relations may
-    n-to-n. 
+    Example:
 
+    class Person(apollo.Entity):
+        prefix = person
+        fields = {'age' : int,
+                  'income' : int,
+                  'ssn' : str,
+                  'emails' : {str},
+                  'nicknames' : {str}
+                 }
 
-    With Lookups
+    Person.add_lookup('ssn')
+    Person.add_lookup('emails')
+    Person.add_lookup('nicknames',injective=False)
 
-    # 1-N
+    class Cat(apollo.Entity):
+        prefix = Cat
+        fields = {'age' : int,
+                  'eye_color' : str,
+                  'favorite_foods' : {str},
+                  'biochip' : int
+                 }
+
+    Cat.add_lookup('biochip')
 
     # forward map:
     a Person.'cats' field maps to a set of cats
