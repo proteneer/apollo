@@ -69,7 +69,8 @@ class Entity(metaclass=_modify_derived):
         are added via the Entity.add_lookup() method, and is injective by
         default. 
     3. relations - which describe relations between different subclasses of 
-        Entity. Relations add additional implicit fields to the Entity
+        Entity. Relations add additional implicit fields to the Entity that can
+        be queried. 
 
     Example:
 
@@ -96,110 +97,23 @@ class Entity(metaclass=_modify_derived):
 
     Cat.add_lookup('biochip')
 
-    # forward map:
-    a Person.'cats' field maps to a set of cats
-    # inverse map:
-    a Cat.'owner' field maps to a single person
-    # apollo.relate(Person,{'cats'},Cat,'owner')
-    # forward function: Person,'cats',{Cat}
-    # inverse function: Cat,'owner',Person
-    # (Person,'cats',{Cat},'owner')
 
-    # cyclic form
-    # ({Person},'cats_to_feed',{Cat},'care_takers')
-
-    # (Person,'email',{str})
-
-    # Get a person's emails: Person.instance('joe')['emails']
-    # Usage, Person.lookup('emails','some_email@mail.com')
-
-    # forward function:
-    a Person.'email' field maps to a set of strings
-    # inverse map
-    Person.lookup('email')
-
-    Person.set_lookup('email',{str})
-
-    # Without lookups
-
-
-    # forward map:
-    a Perso
-
-    class Person(apollo.Object):    
-        prefix = 'person'
-        fields = {'ssn' : str,
-                  'age' : int,
-                  'random_hobbies' : {str},
-                  'emails' : (str, injective_lookup)
-                  }
-
-        no_lookups
-
-        injective_lookups
-
-        non_injective_lookups
-
-        ssn = field(str,lookup=True,backref=True)
-
-        _relations = {'cats' : (Cat, owner),
-                      'emails' : str}      
-
-
-    rel = Person.fwd_relation('kids',{Person})
-    rel.back_relation('parents',{Person})
-
-    Person.fwd_relation('cats',{Cat})
-    Cat.back_relation('owner',Person)
-
-    Person.fwd_relation('emails',{str},injective=False)
-    apollo.relate({Person},'emails',{str})
-
-    # with lookup
-    apollo.relate(Person,'emails',{str})
-    # no lookup
-    Person.create_field('cats',{Cat})
-
-    Person.lookup()
-
-
-    # 1-to-n
-    apollo.relate(Person,'emails',{str})
-    # 1-to-1
-    apollo.relate(Person,'email',str)
+    # A Person's set of cats map to a Cat's owner
+    apollo.relate(Person,'cats',{Cat},'owner')
+    apollo.relate({Person},'cats_to_feed',{Cat},'caretakers')
     
-    class Cat(apollo.Object):
-        prefix = 'cat'
-        fields = {'age' : int,
-                  'favorite_food' : str,
-                  'biometric_id' : int
-                 }
-        lookups = {'biometric_id'}
+    # 1 to 1 with no lookup
+    apollo.relate(Person,'favorite_cat',Cat)
+    # 1 to N with no lookup
+    apollo.relate(Person,'favorite_cats',{Cat})
+    # N to N with no lookup (makes no sense)
 
-    # self relations (implied lookup)
-    # given two person a,b
-    # a \in b['neighbors'] <=> b \in a['neighbors']
-    apollo.relate(Person,{'neighbors'},Person,{'neighbors'})
-
-    # lookup a person given ssn or email
-    Person.lookup('ssn','123-45-6789')
-    Person.lookup('email','fantasy@gmail.com')
-
-    # 1-to-1 relationship)
-    apollo.relate(Cat,'person_soulmate',Person,'cat_soulmate')
-    
-    # 1-to-1 relationship
-    apollo.relate(Person,'husband',Person,'wife')
-
-    # 1-to-n relationship
-    apollo.relate(Person,{'employees'},Person,'boss')
-
-    # 1-to-n with no reverse lookup needed
-    apollo.relate(Person,{'random_cats'},Cat)
-
-    # n-to-n relationship
-    apollo.relate(Person,{'cats_to_feed'},Cat,{'caretakers'})
-
+    # 1 to 1 with lookup
+    apollo.relate(Person,'cat_buddy',Cat,'person_buddy')
+    # 1 to N with lookup
+    apollo.relate(Person,'cats_owned',{Cat},'owner')
+    # N to N with lookup
+    apollo.relate({Person},'cats_to_feed',{Cat},'persons_feeding_me')
     '''
 
     def _str_to_class(class_string):
