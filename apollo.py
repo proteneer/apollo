@@ -72,6 +72,16 @@ class Entity(metaclass=_modify_derived):
         Entity. Relations add additional implicit fields to the Entity that can
         be queried. 
 
+    So when should you use a lookup, and when should you create another entity
+    and define a relation?
+
+    Use lookups when you don't care about being able to list the entire set and
+    test existence of a value in constant time. The 'age' field should be a 
+    lookup because we almost never need to see if a given age in a set of all
+    existing ages, in constant time, though we could certainly iterate over all 
+    the person's ages in O(N) time. In a lookup, there is no set of 'ages' used
+    to keep track of all the existing ages, just a bunch of key value stores.
+
     Example:
 
     class Person(apollo.Entity):
