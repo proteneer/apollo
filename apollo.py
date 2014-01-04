@@ -52,6 +52,7 @@ class _modify_derived(type):
         if len(bases) > 0:
             attrs['fields'] = dict()
             attrs['relations'] = dict()
+            attrs['lookups'] = dict()
         return super(_modify_derived, cls).__new__(cls, clsname, bases, attrs)
     
 class Entity(metaclass=_modify_derived):
@@ -79,8 +80,10 @@ class Entity(metaclass=_modify_derived):
     test existence of a value in constant time. The 'age' field should be a 
     lookup because we almost never need to see if a given age in a set of all
     existing ages, in constant time, though we could certainly iterate over all 
-    the person's ages in O(N) time. In a lookup, there is no set of 'ages' used
-    to keep track of all the existing ages, just a bunch of key value stores.
+    the person's ages in O(N) time. The lifetime of a lookup field is tied
+    directly to the lifetime of the underlying object. In a lookup, there is no 
+    set of 'ages' used to keep track of all the existing ages, just a bunch of 
+    key value stores.
 
     Example:
 
@@ -145,6 +148,10 @@ class Entity(metaclass=_modify_derived):
         return cls(id,db)
 
     @classmethod
+    def add_lookup(cls,field,injective=True):
+        cls.lookups[field]=injective
+
+    @classmethod
     def instance(cls,id,db):
         return cls(id,db)
 
@@ -169,11 +176,31 @@ class Entity(metaclass=_modify_derived):
             return self.__class__.fields[field](self._db.hget(self.__class__.prefix+':'+self._id, field))
 
     @check_field
+    def sadd(self, field, *values):
+        assert type(self.fields[field]) == set
+        self._db.sadd(self.prefix+':'+self._id+':'+field, *values)
+        if field in self.lookups:
+            for value in values:
+                if self.lookups[field]:
+                    self._db.hset(field+':'+value,self.prefix,self.id)
+                else:
+                    self._db.sadd(field+':'+value+':'+self.prefix,self.id)
+        elif field in self.relations:
+            for value in values:
+                foreign_object_type = self.relations[field][0]
+                foreign_field_name = self.relations[field][1]
+                foreign_type = foreign_object_type.fields[foreign_field_name]
+            if foreign_type is set:
+                self._db.sadd(field)
+            elif foreign_type in (str,int,bool,float):
+                
+
+    @check_field
     def __setitem__(self, field, value):
         ''' Set the object's field equal to that of value.
 
             Logic:
-                                        |
+
                               is field a container?
                                 |               |
                                yes              no
@@ -181,8 +208,9 @@ class Entity(metaclass=_modify_derived):
                               is field a primitive?
                                 |               |
                                yes              no
-                                |               |
-                does a previous lookup/relation already exist?
+                
+
+                       is the field a lookup or a relation?
                                 |               |
                                yes              no
                                 |               |
@@ -190,29 +218,71 @@ class Entity(metaclass=_modify_derived):
                         |       |               |       |
                        yes      no             yes      no 
                         |                       |
-                      1-to-n      is the relation a container?
-                                        |               |
-                                       yes              no
-                                        |               |
-                                      n-to-n          1-to-n
-                                                
-
-                        
+                   injective?     is the relation a container?
+                    |      |            |               |
+                   yes     no          yes              no
         '''
+
+        # [ set local key ]
+
         # is field a container?
-        if type(self.fields[field]) in (set,list,tuple):
-            pass
-        else:
-            # is field a primitive?
-            if self.fields[field] in (str,float,int,bool):
-                self._db.hset(self.prefix+':'+self._id,field,value)
-                # is it a lookup?
-                if field in self.lookups:
-                    
-                    # is the referenced lookup a container?
-                    if self.fields[field]
+        if type(self.fields[field]) is set:
+            assert type(value) == self.fields[field]
+            item_field_type = iter(self.fields[field]).next()
+            if type(item_field_type) in (str,int,float,bool):
+                
+                if value in (str,float,int,bool):
+                    self._db.sadd(self.prefix+':'+self._id,field,value)
+            if issubclass(item_field_type,Object):
+                if isinstance(value,self.fields[field]):
+                    self._db.hset(self.prefix+':'+self._id,field,value.prefix)
+                elif isinstance(value,str):
+                    self._db.hset(self.prefix+':'+self._id,field,value)
                 else:
-                    pass
+                    raise TypeError('value type not compatible with field type')
+        elif type(self.fields[field]) is list:
+                raise TypeError('Not implemented')
+        elif type(self.fields[field]) is tuple:
+                raise TypeError('Not implemented')
+        # not a container        
+        elif type(self.fields[field]) in (str,int,float,bool):
+            assert type(value) is self.fields[field]
+            if value in (str,float,int,bool):
+                self._db.hset(self.prefix+':'+self._id,field,value)
+        elif issubclass(self.fields[field],Object):
+            if isinstance(value,self.fields[field]):
+                self._db.hset(self.prefix+':'+self._id,field,value.prefix)
+            elif isinstance(value,str):
+                self._db.hset(self.prefix+':'+self._id,field,value)
+            else:
+                raise TypeError('value type not compatible with field type')
+        else:
+            raise TypeError('Unknown field type',type(self.fields[field]))
+
+        # [ set foreign key ]
+
+        if field in self.lookups:
+            # check if referenced lookup is injective
+            if self.fields[field]:
+                self._db.hset(field+':'+value,self.prefix,value)
+            else:
+                self._db.sadd(field+':'+value+':'+self.prefix,value)
+        elif field in self.relations:
+            object_type = self.relations[field][0]
+            field_name = self.relations[field][1]
+            field_type = object_type.fields[field_name]
+            if isinstance(value,Object):
+                object_id = value.id
+            if not object_type.exists(object_id, self._db):
+                raise ValueError('object '+object_id+' does not exist in '+object_type)
+            
+            if not field_type in (set,tuple,list):
+                self._db.hset(object_type.prefix+':'+value,field_name,self._id)
+                # infinite loops instance[field_name] = self._id
+            elif field_type is set:
+                pass
+            elif field_type is tuple:
+                pass
             elif issubclass(self.fields[field],Object):
                 if isinstance(value,Object):
                     value_id = value.id
