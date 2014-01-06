@@ -9,6 +9,7 @@ rc.flushdb()
 # object to object relations
 # object to primitive relations
 
+
 def check_field(func):
     @wraps(func)
     def _wrapper(self_cls, field, *args, **kwargs):
@@ -19,10 +20,12 @@ def check_field(func):
 
 relations = {}
 
+
 def _instance_delete(instance):
     print(instance)
     print('instance_delete_called')
     pass
+
 
 def _transfer(type1, field1, type2):
     if type(field1) is set:
@@ -39,7 +42,8 @@ def _transfer(type1, field1, type2):
         field_name = field1
         type1.fields[field_name] = type2
     return field_name
-    
+
+
 def relate(typeA, fieldA, typeB, fieldB=None):
     field_nameA = _transfer(typeA, fieldA, typeB)
     if fieldB:
@@ -47,50 +51,52 @@ def relate(typeA, fieldA, typeB, fieldB=None):
         typeA.relations[field_nameA] = (typeB, field_nameB)
         typeB.relations[field_nameB] = (typeA, field_nameA)
 
+
 class _modify_derived(type):
-    def __new__(cls,clsname,bases,attrs):
+
+    def __new__(cls, clsname, bases, attrs):
         if len(bases) > 0:
             attrs['fields'] = dict()
             attrs['relations'] = dict()
             attrs['lookups'] = dict()
         return super(_modify_derived, cls).__new__(cls, clsname, bases, attrs)
-    
+
+
 class Entity(metaclass=_modify_derived):
-    '''
-    An Entity is an entity represented and stored using redis. This class is
-    meant to be subclassed using the example template given below. The ids of
-    the Entitys that exist are contained in a redis SET. There are three major 
-    components to an Entity:
+    ''' An Entity is an entity represented and stored using redis. This class
+    is meant to be subclassed using the example template given below. The ids
+    of the Entities that exist are contained in a redis SET. There are
+    three major components to an Entity:
 
     1. fields - which describes basic features of the Entity using primitives
         such as str,int,float,bool. They can be bracketed in {},[],() to denote
-        a redis SET, a redis LIST, and a redis SORTED SET. 
+        a redis SET, a redis LIST, and a redis SORTED SET.
     2. lookups - which are similar to indices in SQL tables, allowing fast
         retrieval of the entity id given a field and the field value. Lookups
         are added via the Entity.add_lookup() method, and is injective by
-        default. 
-    3. relations - which describe relations between different subclasses of 
+        default.
+    3. relations - which describe relations between different subclasses of
         Entity. Relations add additional implicit fields to the Entity that can
-        be queried. 
+        be queried.
 
     So when should you use a lookup, and when should you create another entity
     and define a relation?
 
     Use lookups when you don't care about being able to list the entire set and
-    test existence of a value in constant time. The 'age' field should be a 
+    test existence of a value in constant time. The 'age' field should be a
     lookup because we almost never need to see if a given age in a set of all
-    existing ages, in constant time, though we could certainly iterate over all 
+    existing ages, in constant time, though we could certainly iterate over all
     the person's ages in O(N) time. The lifetime of a lookup field is tied
-    directly to the lifetime of the underlying object. In a lookup, there is no 
-    set of 'ages' used to keep track of all the existing ages, just a bunch of 
+    directly to the lifetime of the underlying object. In a lookup, there is no
+    set of 'ages' used to keep track of all the existing ages, just a bunch of
     key value stores.
 
-    N-to-N Relations between different sets are a tricky business. For examples,
-    mappings from sets to sets make natural and intuitive sense, so does sets to
-    sorted sets and possibly sets to lists. However, sorted sets to sorted sets
-    are seemingly nonsensical, as are sorted sets to lists, and lists to lists.
-    For this reason, sorted sets and lists can only map to either single objects
-    or sets, but not to other sorted sets or lists.
+    N-to-N Relations between different sets are a tricky business. For example,
+    mappings from sets to sets can make intuitive sense, so does sets to sorted
+    sets and possibly sets to lists. However, sorted sets to sorted sets are
+    seemingly nonsensical, as are sorted sets to lists, and lists to lists.
+    For this reason, sorted sets and lists can only map to either single
+    objects or sets, but not to other sorted sets or lists.
 
     Example:
 
@@ -121,7 +127,7 @@ class Entity(metaclass=_modify_derived):
     # A Person's set of cats map to a Cat's owner
     apollo.relate(Person,'cats',{Cat},'owner')
     apollo.relate({Person},'cats_to_feed',{Cat},'caretakers')
-    
+
     # 1 to 1 with no lookup
     apollo.relate(Person,'favorite_cat',Cat)
     # 1 to N with no lookup
@@ -136,51 +142,47 @@ class Entity(metaclass=_modify_derived):
     apollo.relate({Person},'cats_to_feed',{Cat},'persons_feeding_me')
     '''
 
-    def _str_to_class(class_string):
-        for some_subclass in self.__subclasses__():
-            if some_subclass.__name__ == class_string:
-                return some_subclass
-            
     @classmethod
-    def exists(cls,id,db):
-        return db.sismember(cls.prefix+'s',id)
-  
+    def exists(cls, id, db):
+        return db.sismember(cls.prefix+'s', id)
+
     @classmethod
-    def create(cls,id,db):
-        if isinstance(id,bytes):
+    def create(cls, id, db):
+        if isinstance(id, bytes):
             raise TypeError('id must be a string')
-        if cls.exists(id,db):
-            raise KeyError(id,'already exists')
-        db.sadd(cls.prefix+'s',id)
-        return cls(id,db)
+        if cls.exists(id, db):
+            raise KeyError(id, 'already exists')
+        db.sadd(cls.prefix+'s', id)
+        return cls(id, db)
 
     @classmethod
-    def add_lookup(cls,field,injective=True):
-        cls.lookups[field]=injective
+    def add_lookup(cls, field, injective=True):
+        cls.lookups[field] = injective
 
     @classmethod
-    def instance(cls,id,db):
-        return cls(id,db)
+    def instance(cls, id, db):
+        return cls(id, db)
 
     @classmethod
-    def delete(cls,id,db):
-        print('classmethod delete:',cls,id,db)
+    def delete(cls, id, db):
+        print('classmethod delete:', cls, id, db)
         pass
 
     @property
     def id(self):
         return self._id
 
-    @check_field 
+    @check_field
     def __getitem__(self, field):
         if self.fields[field] is set:
-            return self._db.smembers(self.__class__.prefix+':'+self._id+':'+field)
+            return self._db.smembers(self.prefix+':'+self._id+':'+field)
         elif self.fields[field] is list:
             pass
         elif self.fields[field] is tuple:
             pass
         else:
-            return self.__class__.fields[field](self._db.hget(self.__class__.prefix+':'+self._id, field))
+            return self.fields[field](
+                self._db.hget(self.prefix+':'+self._id, field))
 
     @check_field
     def sadd(self, field, *values):
@@ -189,9 +191,9 @@ class Entity(metaclass=_modify_derived):
         if field in self.lookups:
             for value in values:
                 if self.lookups[field]:
-                    self._db.hset(field+':'+value,self.prefix,self.id)
+                    self._db.hset(field+':'+value, self.prefix, self.id)
                 else:
-                    self._db.sadd(field+':'+value+':'+self.prefix,self.id)
+                    self._db.sadd(field+':'+value+':'+self.prefix, self.id)
         elif field in self.relations:
             for value in values:
                 foreign_object_type = self.relations[field][0]
@@ -199,8 +201,8 @@ class Entity(metaclass=_modify_derived):
                 foreign_type = foreign_object_type.fields[foreign_field_name]
             if foreign_type is set:
                 self._db.sadd(field)
-            elif foreign_type in (str,int,bool,float):
-
+            elif foreign_type in (str, int, bool, float):
+                pass
 
     @check_field
     def __setitem__(self, field, value):
@@ -215,7 +217,6 @@ class Entity(metaclass=_modify_derived):
                               is field a primitive?
                                 |               |
                                yes              no
-                
 
                        is the field a lookup or a relation?
                                 |               |
@@ -223,7 +224,7 @@ class Entity(metaclass=_modify_derived):
                                 |               |
                         is it a lookup?  is it a relation?
                         |       |               |       |
-                       yes      no             yes      no 
+                       yes      no             yes      no
                         |                       |
                    injective?     is the relation a container?
                     |      |            |               |
@@ -236,12 +237,11 @@ class Entity(metaclass=_modify_derived):
         if type(self.fields[field]) is set:
             assert type(value) == self.fields[field]
             item_field_type = iter(self.fields[field]).next()
-            if type(item_field_type) in (str,int,float,bool):
-                
-                if value in (str,float,int,bool):
-                    self._db.sadd(self.prefix+':'+self._id,field,value)
-            if issubclass(item_field_type,Object):
-                if isinstance(value,self.fields[field]):
+            if type(item_field_type) in (str, int, float, bool):
+                if value in (str, float, int, bool):
+                    self._db.sadd(self.prefix+':'+self._id, field, value)
+            if issubclass(item_field_type, Object):
+                if isinstance(value, self.fields[field]):
                     self._db.hset(self.prefix+':'+self._id,field,value.prefix)
                 elif isinstance(value,str):
                     self._db.hset(self.prefix+':'+self._id,field,value)
