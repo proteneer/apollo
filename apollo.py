@@ -8,6 +8,11 @@ rc.flushdb()
 def check_field(func):
     @wraps(func)
     def _wrapper(self_cls, field, *args, **kwargs):
+
+
+        print(field, args, kwargs)
+        print(self_cls.fields)
+
         if not field in self_cls.fields:
             raise TypeError('invalid field')
         return func(self_cls, field, *args, **kwargs)
@@ -47,17 +52,20 @@ def relate(typeA, fieldA, typeB, fieldB=None):
         typeB.relations[field_nameB] = (typeA, field_nameA)
 
 
-class _modify_derived(type):
+class _entity_metaclass(type):
 
     def __new__(cls, clsname, bases, attrs):
+        # create these only for derived classes of Entity
         if len(bases) > 0:
-            attrs['fields'] = dict()
-            attrs['relations'] = dict()
-            attrs['lookups'] = dict()
-        return super(_modify_derived, cls).__new__(cls, clsname, bases, attrs)
+            mandatory_fields = ('fields', 'relations', 'lookups')
+            for field in mandatory_fields:
+                if not field in attrs:
+                    attrs[field] = dict()
+        return super(_entity_metaclass, cls).__new__(
+            cls, clsname, bases, attrs)
 
 
-class Entity(metaclass=_modify_derived):
+class Entity(metaclass=_entity_metaclass):
     ''' An Entity is an entity represented and stored using redis. This class
     is meant to be subclassed using the example template given below. Entities
     are indexed using an id, similar to the primary key in SQL. These ids are
@@ -189,7 +197,8 @@ class Entity(metaclass=_modify_derived):
         ''' Set a hash field.
         '''
         # set local value
-        assert type(self.fields[field]) in (str, int, bool, float, Entity)
+        assert (self.fields[field] in (str, int, bool, float) or
+                issubclass(self.fields[field], Entity))
         assert type(value) in (str, int, bool, float, Entity)
         if type(value) == Entity:
             value = Entity.id
