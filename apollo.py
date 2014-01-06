@@ -85,6 +85,13 @@ class Entity(metaclass=_modify_derived):
     set of 'ages' used to keep track of all the existing ages, just a bunch of 
     key value stores.
 
+    N-to-N Relations between different sets are a tricky business. For examples,
+    mappings from sets to sets make natural and intuitive sense, so does sets to
+    sorted sets and possibly sets to lists. However, sorted sets to sorted sets
+    are seemingly nonsensical, as are sorted sets to lists, and lists to lists.
+    For this reason, sorted sets and lists can only map to either single objects
+    or sets, but not to other sorted sets or lists.
+
     Example:
 
     class Person(apollo.Entity):
@@ -193,7 +200,7 @@ class Entity(metaclass=_modify_derived):
             if foreign_type is set:
                 self._db.sadd(field)
             elif foreign_type in (str,int,bool,float):
-                
+
 
     @check_field
     def __setitem__(self, field, value):
