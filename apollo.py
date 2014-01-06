@@ -5,11 +5,6 @@ import redis
 rc = redis.Redis()
 rc.flushdb()
 
-# supports
-# object to object relations
-# object to primitive relations
-
-
 def check_field(func):
     @wraps(func)
     def _wrapper(self_cls, field, *args, **kwargs):
@@ -64,9 +59,10 @@ class _modify_derived(type):
 
 class Entity(metaclass=_modify_derived):
     ''' An Entity is an entity represented and stored using redis. This class
-    is meant to be subclassed using the example template given below. The ids
-    of the Entities that exist are contained in a redis SET. There are
-    three major components to an Entity:
+    is meant to be subclassed using the example template given below. Entities
+    are indexed using an id, similar to the primary key in SQL. These ids are
+    are contained in a redis SET for book-keeping purposes. There are three
+    major components to an Entity:
 
     1. fields - which describes basic features of the Entity using primitives
         such as str,int,float,bool. They can be bracketed in {},[],() to denote
@@ -87,9 +83,13 @@ class Entity(metaclass=_modify_derived):
     lookup because we almost never need to see if a given age in a set of all
     existing ages, in constant time, though we could certainly iterate over all
     the person's ages in O(N) time. The lifetime of a lookup field is tied
-    directly to the lifetime of the underlying object. In a lookup, there is no
-    set of 'ages' used to keep track of all the existing ages, just a bunch of
-    key value stores.
+    directly to the lifetime of the underlying object. The life time of lookups
+    are bound to the lifetime of the entity.
+
+    Relations on the otherhand, are used to describe relationships between two
+    entities. It is similar to how SQL relates between two tables. Even if a
+    related field is deleted, the entity itself still exists in the set of
+    managed entities.
 
     N-to-N Relations between different sets are a tricky business. For example,
     mappings from sets to sets can make intuitive sense, so does sets to sorted
@@ -185,6 +185,44 @@ class Entity(metaclass=_modify_derived):
                 self._db.hget(self.prefix+':'+self._id, field))
 
     @check_field
+    def hset(self, field, value):
+        ''' Set a hash field.
+        '''
+        # set local value
+        assert type(self.fields[field]) in (str, int, bool, float, Entity)
+        assert type(value) in (str, int, bool, float, Entity)
+        if type(value) == Entity:
+            value = Entity.id
+        self._db.hset(self.prefix+':'+self._id, field, value)
+
+        # set lookup/relations
+        if field in self.lookups:
+            # injective lookup
+            if self.lookups[field]:
+                self._db.hset(field+':'+value, self.prefix, self.id)
+            else:
+                self._db.sadd(field+':'+value+':'+self.prefix, self.id)
+        elif field in self.relations:
+            other_entity = self.relations[field][0]
+            other_field_name = self.relations[field][1]
+            other_field_type = other_entity.fields[other_field_name]
+            if other_field_type is set:
+                self._db.sadd(other_entity.prefix+':'+value
+                              +':'+other_field_name, self.id)
+            elif other_field_type in (str, int, bool, float):
+                self._db.hset(other_entity.prefix+':'+other_field_name,
+                              self.prefix)
+            else:
+                raise TypeError('Unsupported type')
+
+    @check_field
+    def hget(self, field):
+        ''' Get a hash field
+        '''
+        return self._db.hget(self.prefix+':'+self._id, field)
+
+
+    @check_field
     def sadd(self, field, *values):
         assert type(self.fields[field]) == set
         self._db.sadd(self.prefix+':'+self._id+':'+field, *values)
@@ -207,6 +245,12 @@ class Entity(metaclass=_modify_derived):
     @check_field
     def __setitem__(self, field, value):
         ''' Set the object's field equal to that of value.
+
+            this is a convenience method that basically calls one of:
+
+            sadd (for adding to sets)
+            hset (for setting a field value)
+            srem (for removing from a set)
 
             Logic:
 
