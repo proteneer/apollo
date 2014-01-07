@@ -229,7 +229,7 @@ class Entity(metaclass=_entity_metaclass):
                                           other_field_name)
                 if old_owner:
                     self._db.srem(self.prefix+':'+old_owner+':'+field, value)
-                self._db.hdel(other_entity.prefix+':'+value, self.prefix,
+                self._db.hdel(other_entity.prefix+':'+value, other_field_name,
                               self.id)
         # if the field is not in a container, then the relationship is
         # 1 to N or 1 to 1
@@ -313,7 +313,6 @@ class Entity(metaclass=_entity_metaclass):
                     raise TypeError('Unknown field type')
         return set_values
 
-    '''
     @check_field
     def srem(self, field, *values):
         assert type(self.fields[field]) == set
@@ -327,8 +326,9 @@ class Entity(metaclass=_entity_metaclass):
         for value in values:
             if isinstance(value, Entity):
                 value = value.id
-            self._check_lookup_or_relation(field, value)
-    '''
+            self._remove_old_relations(field, value)
+
+        self._db.srem(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 
     @check_field
     def sadd(self, field, *values):
@@ -339,9 +339,7 @@ class Entity(metaclass=_entity_metaclass):
                 carbon_copy_values.append(value.id)
             else:
                 carbon_copy_values.append(value)
-        for value in values:
-            if isinstance(value, Entity):
-                value = value.id
+        for value in carbon_copy_values:
             self._check_lookup_or_relation(field, value)
         self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 

@@ -65,6 +65,15 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(bob.smembers('cats'), {'sphinx', 'polly'})
         self.assertEqual(joe.smembers('cats'), set())
 
+    def test_remove_item(self):
+        joe = Person.create('joe', self.db)
+        sphinx = Cat.create('sphinx', self.db)
+        sphinx.hset('owner', joe)
+        # test deletion
+        joe.srem('cats', sphinx)
+        self.assertEqual(joe.smembers('cats'), set())
+        self.assertEqual(sphinx.hget('owner'), None)
+
     def test_n_to_n_relations(self):
         joe = Person.create('joe', self.db)
         bob = Person.create('bob', self.db)
@@ -76,7 +85,11 @@ class TestApollo(unittest.TestCase):
         self.assertSetEqual(polly.smembers('caretakers'), {'bob'})
         self.assertSetEqual(joe.smembers('cats_to_feed'), {'sphinx'})
         self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly'})
-
+        sphinx.sadd('caretakers', bob)
+        self.assertSetEqual(joe.smembers('cats_to_feed'), {'sphinx'})
+        self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly', 'sphinx'})
+        self.assertSetEqual(polly.smembers('caretakers'), {'bob'})
+        self.assertSetEqual(sphinx.smembers('caretakers'), {'joe', 'bob'})
 
     @classmethod
     def tearDownClass(cls):
