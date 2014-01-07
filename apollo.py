@@ -41,20 +41,24 @@ def _transfer(type1, field1, type2):
 
 
 def _set_relation(entity1, field1, entity2):
-    if entity1 is set:
-        entity = iter(entity1).next()
-    elif entity1 is list or entity1 is tuple:
+    if type(entity1) is set:
+        for element in entity1:
+            entity = element
+    elif type(entity1) in (list, tuple):
         entity = entity1[0]
     elif issubclass(entity1, Entity):
         entity = entity1
     else:
         raise TypeError('Unknown entity type')
-    entity.fields[field1] = entity1
-    return entity1
+    if field1 in entity.fields:
+        raise KeyError('Cannot add relation to existing field')
+    entity.fields[field1] = entity2
+    return entity
 
 
 def relate(entityA, fieldA, entityB, fieldB=None):
-    ''' Relate entityA's fieldA with that of entityB's fieldB.
+    ''' Relate entityA's fieldA with that of entityB's fieldB. fieldA and
+        fieldB are new fields.
 
         Container semantics can be used to denote many to many relationships*.
 
@@ -225,19 +229,9 @@ class Entity(metaclass=_entity_metaclass):
             return self.fields[field](
                 self._db.hget(self.prefix+':'+self._id, field))
 
-    @check_field
-    def hset(self, field, value):
-        ''' Set a hash field.
-        '''
-        # set local value
-        assert (self.fields[field] in (str, int, bool, float) or
-                issubclass(self.fields[field], Entity))
-        assert type(value) in (str, int, bool, float, Entity)
-        if type(value) == Entity:
-            value = Entity.id
-        self._db.hset(self.prefix+':'+self._id, field, value)
-
+    def _check_lookup_or_relation(self, field, value):
         # set lookup/relations
+        assert type(value) in (str, int, bool)
         if field in self.lookups:
             # injective lookup
             if self.lookups[field]:
@@ -251,39 +245,45 @@ class Entity(metaclass=_entity_metaclass):
             if other_field_type is set:
                 self._db.sadd(other_entity.prefix+':'+value
                               +':'+other_field_name, self.id)
-            elif other_field_type in (str, int, bool, float):
-                self._db.hset(other_entity.prefix+':'+other_field_name,
-                              self.prefix)
+            elif issubclass(other_field_type, Entity):
+                self._db.hset(other_entity.prefix+':'+value, other_field_name,
+                              self.id)
             else:
                 raise TypeError('Unsupported type')
+
+    @check_field
+    def hset(self, field, value):
+        ''' Set a hash field.
+        '''
+        # set local value
+        assert (self.fields[field] in (str, int, bool, float) or
+                issubclass(self.fields[field], Entity))
+        assert type(value) in (str, int, bool, float, Entity)
+        if isinstance(value, Entity):
+            value = value.id
+        self._db.hset(self.prefix+':'+self._id, field, value)
+        self._check_lookup_or_relation(field, value)
 
     @check_field
     def hget(self, field):
         ''' Get a hash field
         '''
         field_type = self.fields[field]
-        if field_type in (str, int, bool, float):
+        if (field_type in (str, int, bool, float)):
             return field_type(self._db.hget(self.prefix+':'+self._id, field))
+        elif issubclass(field_type, Entity):
+            return self._db.hget(self.prefix+':'+self._id, field)
+        else:
+            raise TypeError('Unknown type')
 
     @check_field
     def sadd(self, field, *values):
         assert type(self.fields[field]) == set
         self._db.sadd(self.prefix+':'+self._id+':'+field, *values)
-        if field in self.lookups:
-            for value in values:
-                if self.lookups[field]:
-                    self._db.hset(field+':'+value, self.prefix, self.id)
-                else:
-                    self._db.sadd(field+':'+value+':'+self.prefix, self.id)
-        elif field in self.relations:
-            for value in values:
-                foreign_object_type = self.relations[field][0]
-                foreign_field_name = self.relations[field][1]
-                foreign_type = foreign_object_type.fields[foreign_field_name]
-            if foreign_type is set:
-                self._db.sadd(field)
-            elif foreign_type in (str, int, bool, float):
-                pass
+        for value in values:
+            if isinstance(value, Entity):
+                value = value.id
+            self._check_lookup_or_relation(field, value)
 
     @check_field
     def __setitem__(self, field, value):
@@ -414,14 +414,13 @@ class Entity(metaclass=_entity_metaclass):
         else:
             print('debug')
             self._db.hset(self.__class__.prefix+':'+self._id, field, value)
-            
-    def __init__(self,id,db):
+
+    def __init__(self, id, db):
         self._db = db
         self._id = id
-        self.delete = types.MethodType(_instance_delete,self)
+        self.delete = types.MethodType(_instance_delete, self)
+
         # overhead
-        print('instancing ', id)
-        
-        if not self.__class__.exists(id,db):
-            raise KeyError(id,'has not been created yet')
+        if not self.__class__.exists(id, db):
+            raise KeyError(id, 'has not been created yet')
         self.__dict__['_id'] = id

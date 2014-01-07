@@ -15,17 +15,25 @@ class Person(apollo.Entity):
               }
 
 
-class Cats(apollo.Entity):
+class Cat(apollo.Entity):
     prefix = 'cat'
     fields = {'age': int}
 
-apollo.relate(typeA, fieldA, typeB)
+apollo.relate(Person, 'cats', {Cat}, 'owner')
+
+#print(Person.fields)
+#print(Person.relations)
+#print(Cat.fields)
+#print(Cat.relations)
 
 class TestApollo(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.db = redis_client
         cls.db.flushdb()
+
+    def tearDown(self):
+        self.db.flushdb()
 
     def test_hset_hget(self):
         joe = Person.create('joe', self.db)
@@ -35,6 +43,12 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(joe.hget('age'), age)
         joe.hset('ssn', '123-45-6789')
         self.assertEqual(joe.hget('ssn'), ssn)
+
+    def test_basic_relation(self):
+        joe = Person.create('joe', self.db)
+        sphinx = Cat.create('sphinx', self.db)
+        joe.sadd('cats', sphinx)
+        self.assertEqual(sphinx.hget('owner'),'joe')
 
     @classmethod
     def tearDownClass(cls):
