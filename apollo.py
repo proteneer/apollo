@@ -212,7 +212,18 @@ class Entity(metaclass=_entity_metaclass):
             return self.fields[field](
                 self._db.hget(self.prefix+':'+self._id, field))
 
+    def _remove_old_relations(self, field):
+        other_entity = self.relations[field][0]
+        other_field_name = self.relations[field][1]
+        other_field_type = other_entity.fields[other_field_name]
+
+        pass
+
+    def _add_new_relations(self, field, value):
+        pass
+
     def _check_lookup_or_relation(self, field, value):
+        ''' not pipeable '''
         # set lookup/relations
         assert type(value) in (str, int, bool)
         if field in self.lookups:
@@ -225,10 +236,20 @@ class Entity(metaclass=_entity_metaclass):
             other_entity = self.relations[field][0]
             other_field_name = self.relations[field][1]
             other_field_type = other_entity.fields[other_field_name]
+            # see if there's an old value we need to change
+            # this part could have really bad impact on performance, so we need
+            # to speed up the removal of old_value (via LUA)
+            old_value = self._db.hget(self.prefix+':'+self.id, field)
             if type(other_field_type) is set:
+                if old_value:
+                    self._db.srem(other_entity.prefix+':'+old_value
+                                  + ':' + other_field_name, self.id)
                 self._db.sadd(other_entity.prefix+':'+value
-                              +':'+other_field_name, self.id)
+                              + ':' + other_field_name, self.id)
             elif issubclass(other_field_type, Entity):
+                if old_value:
+                    self._db.hdel(other_entity.prefix+':'+old_value,
+                                  other_field_name, self.id)
                 self._db.hset(other_entity.prefix+':'+value, other_field_name,
                               self.id)
             else:
@@ -243,8 +264,9 @@ class Entity(metaclass=_entity_metaclass):
                 issubclass(self.fields[field], Entity))
         if isinstance(value, Entity):
             value = value.id
-        self._db.hset(self.prefix+':'+self._id, field, value)
+
         self._check_lookup_or_relation(field, value)
+        self._db.hset(self.prefix+':'+self._id, field, value)
 
     @check_field
     def hget(self, field):
@@ -283,11 +305,11 @@ class Entity(metaclass=_entity_metaclass):
                 carbon_copy_values.append(value.id)
             else:
                 carbon_copy_values.append(value)
-        self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
         for value in values:
             if isinstance(value, Entity):
                 value = value.id
             self._check_lookup_or_relation(field, value)
+        self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 
     @check_field
     def __setitem__(self, field, value):

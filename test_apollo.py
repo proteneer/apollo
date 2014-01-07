@@ -55,6 +55,11 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(polly.hget('owner'), 'joe')
         self.assertSetEqual(joe.smembers('cats'), {'sphinx', 'polly'})
         # change of ownership
+        bob = Person.create('bob', self.db)
+        sphinx.hset('owner', bob)
+        self.assertEqual(sphinx.hget('owner'), 'bob')
+        self.assertEqual(joe.smembers('cats'), {'polly'})
+        self.assertEqual(bob.smembers('cats'), {'sphinx'})
 
     @classmethod
     def tearDownClass(cls):
