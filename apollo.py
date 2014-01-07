@@ -5,14 +5,10 @@ import redis
 rc = redis.Redis()
 rc.flushdb()
 
+
 def check_field(func):
     @wraps(func)
     def _wrapper(self_cls, field, *args, **kwargs):
-
-
-        print(field, args, kwargs)
-        print(self_cls.fields)
-
         if not field in self_cls.fields:
             raise TypeError('invalid field')
         return func(self_cls, field, *args, **kwargs)
@@ -44,12 +40,49 @@ def _transfer(type1, field1, type2):
     return field_name
 
 
-def relate(typeA, fieldA, typeB, fieldB=None):
-    field_nameA = _transfer(typeA, fieldA, typeB)
+def _set_relation(entity1, field1, entity2):
+    if entity1 is set:
+        entity = iter(entity1).next()
+    elif entity1 is list or entity1 is tuple:
+        entity = entity1[0]
+    elif issubclass(entity1, Entity):
+        entity = entity1
+    else:
+        raise TypeError('Unknown entity type')
+    entity.fields[field1] = entity1
+    return entity1
+
+
+def relate(entityA, fieldA, entityB, fieldB=None):
+    ''' Relate entityA's fieldA with that of entityB's fieldB.
+
+        Container semantics can be used to denote many to many relationships*.
+
+        Example:
+
+        # 1 to N relationship between a person and cats
+        relate(Person,'cats',{Cat},'owner'}
+
+        # N to 1 relationship (equivalent to above)
+        relate({Cat},'owner',Person,'cats')
+
+        # N to N relationship
+        relate({Person},'cats_to_feed',{Cat},'people_who_feed_me')
+        # this is equivalent to the following fun
+        forward_mapping(Person,'cats_to_feed',{Cat})
+        inverse_mapping(Cat,'people_who_feed_me',{Person})
+
+        # N to N relationship between self fields
+        relate({Person},'friends',{Person},'friends')
+
+        *Note that not all n-to-n relationships are sensible.
+        '''
+
+    entity1 = _set_relation(entityA, fieldA, entityB)
     if fieldB:
-        field_nameB = _transfer(typeB, fieldB, typeA)
-        typeA.relations[field_nameA] = (typeB, field_nameB)
-        typeB.relations[field_nameB] = (typeA, field_nameA)
+        entity2 = _set_relation(entityB, fieldB, entityA)
+        entity1.relations[fieldA] = (entity2, fieldB)
+        entity2.relations[fieldB] = (entity1, fieldA)
 
 
 class _entity_metaclass(type):
@@ -228,8 +261,9 @@ class Entity(metaclass=_entity_metaclass):
     def hget(self, field):
         ''' Get a hash field
         '''
-        return self._db.hget(self.prefix+':'+self._id, field)
-
+        field_type = self.fields[field]
+        if field_type in (str, int, bool, float):
+            return field_type(self._db.hget(self.prefix+':'+self._id, field))
 
     @check_field
     def sadd(self, field, *values):
