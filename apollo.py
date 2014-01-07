@@ -220,7 +220,7 @@ class Entity(metaclass=_entity_metaclass):
             # removing relations from sets is a really hairy business.
 
             # N to N
-            if other_field_type is set:
+            if type(other_field_type) is set:
                 self._db.srem(other_entity.prefix + ':' + value + ':' +
                               other_field_name, self.id)
             # N to 1
@@ -231,8 +231,8 @@ class Entity(metaclass=_entity_metaclass):
                     self._db.srem(self.prefix+':'+old_owner+':'+field, value)
                 self._db.hdel(other_entity.prefix+':'+value, self.prefix,
                               self.id)
-        # if it's not in a container, then the relationship is an implied
-        # 1 to N or possibly 1 to 1
+        # if the field is not in a container, then the relationship is
+        # 1 to N or 1 to 1
         else:
             old_value = self._db.hget(self.prefix+':'+self.id, field)
             if old_value:

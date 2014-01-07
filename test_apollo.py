@@ -66,7 +66,17 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(joe.smembers('cats'), set())
 
     def test_n_to_n_relations(self):
-        pass
+        joe = Person.create('joe', self.db)
+        bob = Person.create('bob', self.db)
+        sphinx = Cat.create('sphinx', self.db)
+        polly = Cat.create('polly', self.db)
+        sphinx.sadd('caretakers', joe)
+        polly.sadd('caretakers', bob)
+        self.assertSetEqual(sphinx.smembers('caretakers'), {'joe'})
+        self.assertSetEqual(polly.smembers('caretakers'), {'bob'})
+        self.assertSetEqual(joe.smembers('cats_to_feed'), {'sphinx'})
+        self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly'})
+
 
     @classmethod
     def tearDownClass(cls):
