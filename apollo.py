@@ -213,6 +213,7 @@ class Entity(metaclass=_entity_metaclass):
                 self._db.hget(self.prefix+':'+self._id, field))
 
     def _remove_old_relations(self, field, value):
+        ''' cleans up the relations related to the field '''
         other_entity = self.relations[field][0]
         other_field_name = self.relations[field][1]
         other_field_type = other_entity.fields[other_field_name]
