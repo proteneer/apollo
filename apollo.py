@@ -33,7 +33,7 @@ def _set_relation(entity1, field1, entity2):
         entity = entity1
     else:
         raise TypeError('Unknown entity type')
-    if field1 in entity.fields:
+    if (field1 in entity.fields) and (entity.fields[field1] != entity2):
         raise KeyError('Cannot add relation to existing field')
     entity.fields[field1] = entity2
     return entity
@@ -219,7 +219,6 @@ class Entity(metaclass=_entity_metaclass):
         other_field_type = other_entity.fields[other_field_name]
         if type(self.fields[field]) is set:
             # removing relations from sets is a really hairy business.
-
             # N to N
             if type(other_field_type) is set:
                 self._db.srem(other_entity.prefix + ':' + value + ':' +

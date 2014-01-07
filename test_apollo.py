@@ -21,6 +21,7 @@ class Cat(apollo.Entity):
 
 apollo.relate(Person, 'cats', {Cat}, 'owner')
 apollo.relate({Person}, 'cats_to_feed', {Cat}, 'caretakers')
+apollo.relate({Person}, 'friends', {Person}, 'friends')
 
 #print(Person.fields)
 #print(Person.relations)
@@ -79,17 +80,36 @@ class TestApollo(unittest.TestCase):
         bob = Person.create('bob', self.db)
         sphinx = Cat.create('sphinx', self.db)
         polly = Cat.create('polly', self.db)
+
         sphinx.sadd('caretakers', joe)
         polly.sadd('caretakers', bob)
         self.assertSetEqual(sphinx.smembers('caretakers'), {'joe'})
         self.assertSetEqual(polly.smembers('caretakers'), {'bob'})
         self.assertSetEqual(joe.smembers('cats_to_feed'), {'sphinx'})
         self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly'})
+
         sphinx.sadd('caretakers', bob)
         self.assertSetEqual(joe.smembers('cats_to_feed'), {'sphinx'})
         self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly', 'sphinx'})
         self.assertSetEqual(polly.smembers('caretakers'), {'bob'})
         self.assertSetEqual(sphinx.smembers('caretakers'), {'joe', 'bob'})
+
+        sphinx.srem('caretakers', bob)
+        self.assertSetEqual(sphinx.smembers('caretakers'), {'joe'})
+        self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly'})
+
+    def test_self_reference(self):
+        joe = Person.create('joe', self.db)
+        bob = Person.create('bob', self.db)
+        joe.sadd('friends', bob)
+        self.assertSetEqual(joe.smembers('friends'), {'bob'})
+        self.assertSetEqual(bob.smembers('friends'), {'joe'})
+        joe.srem('friends', bob)
+        self.assertSetEqual(joe.smembers('friends'), set())
+        self.assertSetEqual(bob.smembers('friends'), set())
+
+    def test_deletion(self):
+        pass
 
     @classmethod
     def tearDownClass(cls):
