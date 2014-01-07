@@ -20,6 +20,7 @@ class Cat(apollo.Entity):
     fields = {'age': int}
 
 apollo.relate(Person, 'cats', {Cat}, 'owner')
+apollo.relate({Person}, 'cats_to_feed', {Cat}, 'caretakers')
 
 #print(Person.fields)
 #print(Person.relations)
@@ -45,7 +46,7 @@ class TestApollo(unittest.TestCase):
         joe.hset('ssn', '123-45-6789')
         self.assertEqual(joe.hget('ssn'), ssn)
 
-    def test_basic_relation(self):
+    def test_one_to_n_relations(self):
         joe = Person.create('joe', self.db)
         sphinx = Cat.create('sphinx', self.db)
         joe.sadd('cats', sphinx)
@@ -60,6 +61,12 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(sphinx.hget('owner'), 'bob')
         self.assertEqual(joe.smembers('cats'), {'polly'})
         self.assertEqual(bob.smembers('cats'), {'sphinx'})
+        bob.sadd('cats', polly)
+        self.assertEqual(bob.smembers('cats'), {'sphinx', 'polly'})
+        self.assertEqual(joe.smembers('cats'), set())
+
+    def test_n_to_n_relations(self):
+        pass
 
     @classmethod
     def tearDownClass(cls):

@@ -212,15 +212,51 @@ class Entity(metaclass=_entity_metaclass):
             return self.fields[field](
                 self._db.hget(self.prefix+':'+self._id, field))
 
-    def _remove_old_relations(self, field):
+    def _remove_old_relations(self, field, value):
         other_entity = self.relations[field][0]
         other_field_name = self.relations[field][1]
         other_field_type = other_entity.fields[other_field_name]
+        if type(self.fields[field]) is set:
+            # removing relations from sets is a really hairy business.
 
-        pass
+            # N to N
+            if other_field_type is set:
+                self._db.srem(other_entity.prefix + ':' + value + ':' +
+                              other_field_name, self.id)
+            # N to 1
+            elif issubclass(other_field_type, Entity):
+                old_owner = self._db.hget(other_entity.prefix+':'+value,
+                                          other_field_name)
+                if old_owner:
+                    self._db.srem(self.prefix+':'+old_owner+':'+field, value)
+                self._db.hdel(other_entity.prefix+':'+value, self.prefix,
+                              self.id)
+        # if it's not in a container, then the relationship is an implied
+        # 1 to N or possibly 1 to 1
+        else:
+            old_value = self._db.hget(self.prefix+':'+self.id, field)
+            if old_value:
+                if type(other_field_type) is set:
+                    self._db.srem(other_entity.prefix+':'+old_value
+                                  + ':' + other_field_name, self.id)
+                elif issubclass(other_field_type, Entity):
+                    self._db.hdel(other_entity.prefix+':'+old_value,
+                                  other_field_name, self.id)
+                else:
+                    raise TypeError('Unsupported type')
 
     def _add_new_relations(self, field, value):
-        pass
+        other_entity = self.relations[field][0]
+        other_field_name = self.relations[field][1]
+        other_field_type = other_entity.fields[other_field_name]
+        if type(other_field_type) is set:
+            self._db.sadd(other_entity.prefix+':'+value
+                          + ':' + other_field_name, self.id)
+        elif issubclass(other_field_type, Entity):
+            self._db.hset(other_entity.prefix+':'+value, other_field_name,
+                          self.id)
+        else:
+            raise TypeError('Unsupported type')
 
     def _check_lookup_or_relation(self, field, value):
         ''' not pipeable '''
@@ -233,27 +269,8 @@ class Entity(metaclass=_entity_metaclass):
             else:
                 self._db.sadd(field+':'+value+':'+self.prefix, self.id)
         elif field in self.relations:
-            other_entity = self.relations[field][0]
-            other_field_name = self.relations[field][1]
-            other_field_type = other_entity.fields[other_field_name]
-            # see if there's an old value we need to change
-            # this part could have really bad impact on performance, so we need
-            # to speed up the removal of old_value (via LUA)
-            old_value = self._db.hget(self.prefix+':'+self.id, field)
-            if type(other_field_type) is set:
-                if old_value:
-                    self._db.srem(other_entity.prefix+':'+old_value
-                                  + ':' + other_field_name, self.id)
-                self._db.sadd(other_entity.prefix+':'+value
-                              + ':' + other_field_name, self.id)
-            elif issubclass(other_field_type, Entity):
-                if old_value:
-                    self._db.hdel(other_entity.prefix+':'+old_value,
-                                  other_field_name, self.id)
-                self._db.hset(other_entity.prefix+':'+value, other_field_name,
-                              self.id)
-            else:
-                raise TypeError('Unsupported type')
+            self._remove_old_relations(field, value)
+            self._add_new_relations(field, value)
 
     @check_field
     def hset(self, field, value):
@@ -295,6 +312,23 @@ class Entity(metaclass=_entity_metaclass):
                 else:
                     raise TypeError('Unknown field type')
         return set_values
+
+    '''
+    @check_field
+    def srem(self, field, *values):
+        assert type(self.fields[field]) == set
+        carbon_copy_values = []
+        for value in values:
+            if isinstance(value, Entity):
+                carbon_copy_values.append(value.id)
+            else:
+                carbon_copy_values.append(value)
+
+        for value in values:
+            if isinstance(value, Entity):
+                value = value.id
+            self._check_lookup_or_relation(field, value)
+    '''
 
     @check_field
     def sadd(self, field, *values):
