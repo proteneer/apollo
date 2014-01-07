@@ -23,23 +23,6 @@ def _instance_delete(instance):
     pass
 
 
-def _transfer(type1, field1, type2):
-    if type(field1) is set:
-        for val in field1:
-            field_name = val
-        type1.fields[field_name] = {type2}
-    elif type(field1) is list:
-        field_name = field1[0]
-        type1.fields[field_name] = [type2]
-    elif type(field1) is tuple:
-        field_name = field1[0]
-        type1.fields[field_name] = (type2)
-    else:
-        field_name = field1
-        type1.fields[field_name] = type2
-    return field_name
-
-
 def _set_relation(entity1, field1, entity2):
     if type(entity1) is set:
         for element in entity1:
@@ -242,7 +225,7 @@ class Entity(metaclass=_entity_metaclass):
             other_entity = self.relations[field][0]
             other_field_name = self.relations[field][1]
             other_field_type = other_entity.fields[other_field_name]
-            if other_field_type is set:
+            if type(other_field_type) is set:
                 self._db.sadd(other_entity.prefix+':'+value
                               +':'+other_field_name, self.id)
             elif issubclass(other_field_type, Entity):
@@ -258,7 +241,6 @@ class Entity(metaclass=_entity_metaclass):
         # set local value
         assert (self.fields[field] in (str, int, bool, float) or
                 issubclass(self.fields[field], Entity))
-        assert type(value) in (str, int, bool, float, Entity)
         if isinstance(value, Entity):
             value = value.id
         self._db.hset(self.prefix+':'+self._id, field, value)
@@ -277,9 +259,31 @@ class Entity(metaclass=_entity_metaclass):
             raise TypeError('Unknown type')
 
     @check_field
+    def smembers(self, field):
+        ''' Return members of a set '''
+        if type(self.fields[field]) != set:
+            raise KeyError('called smembers on non-set field')
+        set_values = set()
+        for member in self._db.smembers(self.prefix+':'+self._id+':'+field):
+            for primitive_type in self.fields[field]:
+                if issubclass(primitive_type, Entity):
+                    set_values.add(member)
+                elif primitive_type in (str, int, bool, float):
+                    set_values.add(primitive_type(member))
+                else:
+                    raise TypeError('Unknown field type')
+        return set_values
+
+    @check_field
     def sadd(self, field, *values):
         assert type(self.fields[field]) == set
-        self._db.sadd(self.prefix+':'+self._id+':'+field, *values)
+        carbon_copy_values = []
+        for value in values:
+            if isinstance(value, Entity):
+                carbon_copy_values.append(value.id)
+            else:
+                carbon_copy_values.append(value)
+        self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
         for value in values:
             if isinstance(value, Entity):
                 value = value.id

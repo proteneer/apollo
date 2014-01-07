@@ -26,6 +26,7 @@ apollo.relate(Person, 'cats', {Cat}, 'owner')
 #print(Cat.fields)
 #print(Cat.relations)
 
+
 class TestApollo(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -48,7 +49,12 @@ class TestApollo(unittest.TestCase):
         joe = Person.create('joe', self.db)
         sphinx = Cat.create('sphinx', self.db)
         joe.sadd('cats', sphinx)
-        self.assertEqual(sphinx.hget('owner'),'joe')
+        self.assertEqual(sphinx.hget('owner'), 'joe')
+        polly = Cat.create('polly', self.db)
+        polly.hset('owner', joe)
+        self.assertEqual(polly.hget('owner'), 'joe')
+        self.assertSetEqual(joe.smembers('cats'), {'sphinx', 'polly'})
+        # change of ownership
 
     @classmethod
     def tearDownClass(cls):
