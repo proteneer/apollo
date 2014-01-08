@@ -33,8 +33,9 @@ def _set_relation(entity1, field1, entity2):
         entity = entity1
     else:
         raise TypeError('Unknown entity type')
-    if (field1 in entity.fields) and (entity.fields[field1] != entity2):
-        raise KeyError('Cannot add relation to existing field')
+    if (field1 in entity.fields):
+        if (entity1 != entity2):
+            raise KeyError('Cannot add relation to existing field')
     entity.fields[field1] = entity2
     return entity
 
@@ -196,7 +197,7 @@ class Entity(metaclass=_entity_metaclass):
             if type(field_type) is set:
                 if field_name in self.relations:
                     for member in self._db.smembers(self.prefix+':'+self.id
-                                                    +':'+field_name):
+                                                    + ':' + field_name):
                         self._remove_old_relations(field_name, member)
                 self._db.delete(self.prefix+':'+self.id+':'+field_name)
             elif issubclass(field_type, Entity):

@@ -22,6 +22,7 @@ class Cat(apollo.Entity):
 apollo.relate(Person, 'cats', {Cat}, 'owner')
 apollo.relate({Person}, 'cats_to_feed', {Cat}, 'caretakers')
 apollo.relate({Person}, 'friends', {Person}, 'friends')
+apollo.relate(Person, 'single_cat', Cat, 'single_owner')
 
 #print(Person.fields)
 #print(Person.relations)
@@ -46,6 +47,12 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(joe.hget('age'), age)
         joe.hset('ssn', '123-45-6789')
         self.assertEqual(joe.hget('ssn'), ssn)
+
+    def test_one_to_one_relations(self):
+        joe = Person.create('joe', self.db)
+        sphinx = Cat.create('sphinx', self.db)
+        joe.hset('single_cat', sphinx)
+        joe.hget('single_cat')
 
     def test_one_to_n_relations(self):
         joe = Person.create('joe', self.db)
