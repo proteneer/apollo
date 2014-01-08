@@ -216,6 +216,12 @@ class Entity(metaclass=_entity_metaclass):
         return self._id
 
     @check_field
+    def hincrby(self, field, count=1):
+        if self.fields[field] != int:
+            raise TypeError('cannot call hincrby on a non-int field')
+        return self._db.hincrby(self.prefix+':'+self._id, field, count)
+
+    @check_field
     def __getitem__(self, field):
         if self.fields[field] is set:
             return self._db.smembers(self.prefix+':'+self._id+':'+field)
@@ -362,136 +368,6 @@ class Entity(metaclass=_entity_metaclass):
         for value in carbon_copy_values:
             self._check_lookup_or_relation(field, value)
         self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
-
-    @check_field
-    def __setitem__(self, field, value):
-        ''' Set the object's field equal to that of value.
-
-            this is a convenience method that basically calls one of:
-
-            sadd (for adding to sets)
-            hset (for setting a field value)
-            srem (for removing from a set)
-
-            Logic:
-
-                              is field a container?
-                                |               |
-                               yes              no
-                                |               |
-                              is field a primitive?
-                                |               |
-                               yes              no
-
-                       is the field a lookup or a relation?
-                                |               |
-                               yes              no
-                                |               |
-                        is it a lookup?  is it a relation?
-                        |       |               |       |
-                       yes      no             yes      no
-                        |                       |
-                   injective?     is the relation a container?
-                    |      |            |               |
-                   yes     no          yes              no
-        '''
-
-        # [ set local key ]
-
-        # is field a container?
-        if type(self.fields[field]) is set:
-            assert type(value) == self.fields[field]
-            item_field_type = iter(self.fields[field]).next()
-            if type(item_field_type) in (str, int, float, bool):
-                if value in (str, float, int, bool):
-                    self._db.sadd(self.prefix+':'+self._id, field, value)
-            if issubclass(item_field_type, Object):
-                if isinstance(value, self.fields[field]):
-                    self._db.hset(self.prefix+':'+self._id,field,value.prefix)
-                elif isinstance(value,str):
-                    self._db.hset(self.prefix+':'+self._id,field,value)
-                else:
-                    raise TypeError('value type not compatible with field type')
-        elif type(self.fields[field]) is list:
-                raise TypeError('Not implemented')
-        elif type(self.fields[field]) is tuple:
-                raise TypeError('Not implemented')
-        # not a container        
-        elif type(self.fields[field]) in (str,int,float,bool):
-            assert type(value) is self.fields[field]
-            if value in (str,float,int,bool):
-                self._db.hset(self.prefix+':'+self._id,field,value)
-        elif issubclass(self.fields[field],Object):
-            if isinstance(value,self.fields[field]):
-                self._db.hset(self.prefix+':'+self._id,field,value.prefix)
-            elif isinstance(value,str):
-                self._db.hset(self.prefix+':'+self._id,field,value)
-            else:
-                raise TypeError('value type not compatible with field type')
-        else:
-            raise TypeError('Unknown field type',type(self.fields[field]))
-
-        # [ set foreign key ]
-
-        if field in self.lookups:
-            # check if referenced lookup is injective
-            if self.fields[field]:
-                self._db.hset(field+':'+value,self.prefix,value)
-            else:
-                self._db.sadd(field+':'+value+':'+self.prefix,value)
-        elif field in self.relations:
-            object_type = self.relations[field][0]
-            field_name = self.relations[field][1]
-            field_type = object_type.fields[field_name]
-            if isinstance(value,Object):
-                object_id = value.id
-            if not object_type.exists(object_id, self._db):
-                raise ValueError('object '+object_id+' does not exist in '+object_type)
-            
-            if not field_type in (set,tuple,list):
-                self._db.hset(object_type.prefix+':'+value,field_name,self._id)
-                # infinite loops instance[field_name] = self._id
-            elif field_type is set:
-                pass
-            elif field_type is tuple:
-                pass
-            elif issubclass(self.fields[field],Object):
-                if isinstance(value,Object):
-                    value_id = value.id
-                else:
-                    value_id = value
-                self._db.hset(self.prefix+':'+self._id,field,value_id)
-                # is it a lookup?
-            else:
-                raise TypeError('unknown field mapping') 
-
-        if self.fields[field] is set:
-            pass
-        elif self.fields[field] is list:
-            pass
-        elif self.fields[field] is tuple:
-            pass
-        elif issubclass(self.fields[field],Object):
-            assert isinstance(value,str) or isinstance(value,Object)
-            if field in self.relations:
-                object_type = self.relations[field][0]
-                field_name = self.relations[field][1]
-                field_type = object_type.fields[field_name]
-                if isinstance(value,Object):
-                    object_id = value.id
-                if not object_type.exists(object_id, self._db):
-                    raise ValueError('object '+object_id+' does not exist in '+object_type)
-                if not field_type in (set,tuple,list):
-                    self._db.hset(object_type.prefix+':'+value,field_name,self._id)
-                    # infinite loops instance[field_name] = self._id
-                elif field_type is set:
-                    pass
-                elif field_type is tuple:
-                    pass
-            self._db.hset(self.__class__.prefix+':'+self._id, field, value)
-        else:
-            print('debug')
-            self._db.hset(self.__class__.prefix+':'+self._id, field, value)
 
     def __init__(self, id, db):
         self._db = db

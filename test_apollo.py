@@ -39,6 +39,12 @@ class TestApollo(unittest.TestCase):
     def tearDown(self):
         self.db.flushdb()
 
+    def test_hincrby(self):
+        joe = Person.create('joe', self.db)
+        joe.hset('age', 25)
+        joe.hincrby('age')
+        self.assertEqual(joe.hget('age'), 26)
+
     def test_hset_hget(self):
         joe = Person.create('joe', self.db)
         age = 25
