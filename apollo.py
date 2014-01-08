@@ -234,7 +234,6 @@ class Entity(metaclass=_entity_metaclass):
         other_field_type = other_entity.fields[other_field_name]
 
         if type(self.fields[field]) is set:
-            # removing relations from sets is a really hairy business.
             # N to N
             if type(other_field_type) is set:
                 self._db.srem(other_entity.prefix + ':' + value + ':' +
@@ -245,21 +244,21 @@ class Entity(metaclass=_entity_metaclass):
                                           other_field_name)
                 if old_owner:
                     self._db.srem(self.prefix+':'+old_owner+':'+field, value)
-                self._db.hdel(other_entity.prefix+':'+value, other_field_name,
-                              self.id)
-        # if the field is not in a container, then the relationship is
-        # 1 to N or 1 to 1
+                self._db.hdel(other_entity.prefix+':'+value, other_field_name)
         else:
-            old_value = self._db.hget(self.prefix+':'+self.id, field)
-            if old_value:
-                if type(other_field_type) is set:
+            # 1 to N
+            if type(other_field_type) is set:
+                old_value = self._db.hget(self.prefix+':'+self.id, field)
+                if old_value:
                     self._db.srem(other_entity.prefix+':'+old_value
                                   + ':' + other_field_name, self.id)
-                elif issubclass(other_field_type, Entity):
-                    self._db.hdel(other_entity.prefix+':'+old_value,
-                                  other_field_name, self.id)
-                else:
-                    raise TypeError('Unsupported type')
+            # 1 to 1
+            elif issubclass(other_field_type, Entity):
+                old_owner = self._db.hget(other_entity.prefix+':'+value,
+                                          other_field_name)
+                if old_owner:
+                    self._db.hdel(self.prefix+':'+old_owner, field)
+                self._db.hdel(other_entity.prefix+':'+value, other_field_name)
 
     def _add_new_relations(self, field, value):
         other_entity = self.relations[field][0]

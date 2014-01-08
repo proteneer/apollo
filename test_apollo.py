@@ -39,6 +39,7 @@ class TestApollo(unittest.TestCase):
     def tearDown(self):
         self.db.flushdb()
 
+    
     def test_hset_hget(self):
         joe = Person.create('joe', self.db)
         age = 25
@@ -47,12 +48,19 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(joe.hget('age'), age)
         joe.hset('ssn', '123-45-6789')
         self.assertEqual(joe.hget('ssn'), ssn)
-
+    
     def test_one_to_one_relations(self):
         joe = Person.create('joe', self.db)
         sphinx = Cat.create('sphinx', self.db)
         joe.hset('single_cat', sphinx)
-        joe.hget('single_cat')
+        self.assertEqual(joe.hget('single_cat'), 'sphinx')
+        self.assertEqual(sphinx.hget('single_owner'), 'joe')
+        bob = Person.create('bob', self.db)
+        bob.hset('single_cat', sphinx)
+        self.assertEqual(bob.hget('single_cat'), 'sphinx')
+        self.assertEqual(sphinx.hget('single_owner'), 'bob')
+        self.assertEqual(joe.hget('single_cat'), None)
+
 
     def test_one_to_n_relations(self):
         joe = Person.create('joe', self.db)
@@ -140,6 +148,7 @@ class TestApollo(unittest.TestCase):
         joe.delete()
         self.assertEqual(sphinx.hget('owner'), None)
         self.assertListEqual(self.db.keys('*'), ['cats'])
+    
 
     @classmethod
     def tearDownClass(cls):
