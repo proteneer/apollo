@@ -191,9 +191,15 @@ class Entity(metaclass=_entity_metaclass):
     def instance(cls, id, db):
         return cls(id, db)
 
-    @classmethod
-    def delete(cls, id, db):
-        print('classmethod delete:', cls, id, db)
+    def delete(self, id):
+        for field_name, field_type in self.fields.items():
+            if type(field_type) is set:
+                self._db.delete(self.prefix+':'+self.id+':'+field_name)
+            elif issubclass(field_type, Entity):
+                pass
+            elif field_type in (set, int, bool, float):
+                pass
+        print('classmethod delete:', self, id, db)
         pass
 
     @property
@@ -217,6 +223,7 @@ class Entity(metaclass=_entity_metaclass):
         other_entity = self.relations[field][0]
         other_field_name = self.relations[field][1]
         other_field_type = other_entity.fields[other_field_name]
+
         if type(self.fields[field]) is set:
             # removing relations from sets is a really hairy business.
             # N to N
@@ -476,7 +483,7 @@ class Entity(metaclass=_entity_metaclass):
     def __init__(self, id, db):
         self._db = db
         self._id = id
-        self.delete = types.MethodType(_instance_delete, self)
+        #self.delete = types.MethodType(_instance_delete, self)
 
         # overhead
         if not self.__class__.exists(id, db):

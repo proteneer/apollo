@@ -52,16 +52,19 @@ class TestApollo(unittest.TestCase):
         sphinx = Cat.create('sphinx', self.db)
         joe.sadd('cats', sphinx)
         self.assertEqual(sphinx.hget('owner'), 'joe')
+
         polly = Cat.create('polly', self.db)
         polly.hset('owner', joe)
         self.assertEqual(polly.hget('owner'), 'joe')
         self.assertSetEqual(joe.smembers('cats'), {'sphinx', 'polly'})
+
         # change of ownership
         bob = Person.create('bob', self.db)
         sphinx.hset('owner', bob)
         self.assertEqual(sphinx.hget('owner'), 'bob')
         self.assertEqual(joe.smembers('cats'), {'polly'})
         self.assertEqual(bob.smembers('cats'), {'sphinx'})
+
         bob.sadd('cats', polly)
         self.assertEqual(bob.smembers('cats'), {'sphinx', 'polly'})
         self.assertEqual(joe.smembers('cats'), set())
@@ -101,9 +104,11 @@ class TestApollo(unittest.TestCase):
     def test_self_reference(self):
         joe = Person.create('joe', self.db)
         bob = Person.create('bob', self.db)
+
         joe.sadd('friends', bob)
         self.assertSetEqual(joe.smembers('friends'), {'bob'})
         self.assertSetEqual(bob.smembers('friends'), {'joe'})
+
         joe.srem('friends', bob)
         self.assertSetEqual(joe.smembers('friends'), set())
         self.assertSetEqual(bob.smembers('friends'), set())
