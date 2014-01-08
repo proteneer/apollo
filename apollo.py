@@ -191,16 +191,24 @@ class Entity(metaclass=_entity_metaclass):
     def instance(cls, id, db):
         return cls(id, db)
 
-    def delete(self, id):
+    def delete(self):
         for field_name, field_type in self.fields.items():
             if type(field_type) is set:
+                if field_name in self.relations:
+                    for member in self._db.smembers(self.prefix+':'+self.id
+                                                    +':'+field_name):
+                        self._remove_old_relations(field_name, member)
                 self._db.delete(self.prefix+':'+self.id+':'+field_name)
             elif issubclass(field_type, Entity):
-                pass
+                if field_name in self.relations:
+                    value = self._db.hget(self.prefix+':'+self.id, field_name)
+                    if value:
+                        self._remove_old_relations(field_name, value)
             elif field_type in (set, int, bool, float):
+                # for lookups possibly in the future
                 pass
-        print('classmethod delete:', self, id, db)
-        pass
+        self._db.delete(self.prefix+':'+self.id)
+        self._db.srem(self.prefix+'s', self.id)
 
     @property
     def id(self):
@@ -340,12 +348,16 @@ class Entity(metaclass=_entity_metaclass):
     @check_field
     def sadd(self, field, *values):
         assert type(self.fields[field]) == set
+        for key in self.fields[field]:
+            derived_entity = key
         carbon_copy_values = []
         for value in values:
-            if isinstance(value, Entity):
+            if isinstance(value, derived_entity):
                 carbon_copy_values.append(value.id)
-            else:
+            elif type(value) == str:
                 carbon_copy_values.append(value)
+            else:
+                raise TypeError('Bad sadd type')
         for value in carbon_copy_values:
             self._check_lookup_or_relation(field, value)
         self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)

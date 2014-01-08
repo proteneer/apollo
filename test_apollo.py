@@ -113,8 +113,26 @@ class TestApollo(unittest.TestCase):
         self.assertSetEqual(joe.smembers('friends'), set())
         self.assertSetEqual(bob.smembers('friends'), set())
 
-    def test_deletion(self):
-        pass
+    def test_delete_entity(self):
+        joe = Person.create('joe', self.db)
+        joe.delete()
+        self.assertListEqual(self.db.keys('*'), [])
+
+        joe = Person.create('joe', self.db)
+        sphinx = Cat.create('sphinx', self.db)
+        polly = Cat.create('polly', self.db)
+
+        joe.sadd('cats', sphinx)
+        joe.sadd('cats', polly)
+        self.assertSetEqual(joe.smembers('cats'), {'sphinx', 'polly'})
+
+        polly.delete()
+        self.assertSetEqual(joe.smembers('cats'), {'sphinx'})
+        self.assertEqual(sphinx.hget('owner'), 'joe')
+
+        joe.delete()
+        self.assertEqual(sphinx.hget('owner'), None)
+        self.assertListEqual(self.db.keys('*'), ['cats'])
 
     @classmethod
     def tearDownClass(cls):
