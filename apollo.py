@@ -329,8 +329,8 @@ class Entity(metaclass=_entity_metaclass):
                 elif issubclass(other_field_type, Entity):
                     self._db.hdel(other_entity.prefix+':'+value,
                                   other_field_name)
-                self._db.srem(self.prefix+':'+self.id+':'+field, value)
-        #self._db.srem(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
+
+        self._db.srem(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 
     @check_field
     def sadd(self, field, *values):
@@ -340,7 +340,7 @@ class Entity(metaclass=_entity_metaclass):
         carbon_copy_values = []
         # convert all values to strings first
         for value in values:
-            if isinstance(value, derived_entity):
+            if isinstance(value, derived_entity) and isinstance(value, Entity):
                 carbon_copy_values.append(value.id)
             elif type(value) == str:
                 carbon_copy_values.append(value)
@@ -359,13 +359,12 @@ class Entity(metaclass=_entity_metaclass):
                     other_entity(value, self._db).hdel(other_field_name)
                     self._db.hset(other_entity.prefix+':'+value,
                                   other_field_name, self.id)
+
         self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 
     def __init__(self, id, db):
         self._db = db
         self._id = id
-        #self.delete = types.MethodType(_instance_delete, self)
-
         # overhead
         if not self.__class__.exists(id, db):
             raise KeyError(id, 'has not been created yet')
