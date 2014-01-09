@@ -1,8 +1,4 @@
 from functools import wraps
-import redis
-
-rc = redis.Redis()
-rc.flushdb()
 
 
 def check_field(func):
@@ -12,14 +8,6 @@ def check_field(func):
             raise TypeError('invalid field')
         return func(self_cls, field, *args, **kwargs)
     return _wrapper
-
-relations = {}
-
-
-def _instance_delete(instance):
-    print(instance)
-    print('instance_delete_called')
-    pass
 
 
 def _set_relation(entity1, field1, entity2):
@@ -40,30 +28,31 @@ def _set_relation(entity1, field1, entity2):
 
 
 def relate(entityA, fieldA, entityB, fieldB=None):
-    ''' Relate entityA's fieldA with that of entityB's fieldB. fieldA and
-        fieldB are new fields.
+    """ Relate entityA's fieldA with that of entityB's fieldB. fieldA and
+    fieldB are new fields to be defined.
 
-        Container semantics can be used to denote many to many relationships*.
+    Container semantics can be used to denote many to many relationships*.
 
-        Example:
+    Example:
 
-        # 1 to N relationship between a person and cats
-        relate(Person,'cats',{Cat},'owner'}
+    # 1 to N relationship between a person and cats
+    relate(Person,'cats',{Cat},'owner'}
 
-        # N to 1 relationship (equivalent to above)
-        relate({Cat},'owner',Person,'cats')
+    # N to 1 relationship (equivalent to above)
+    relate({Cat},'owner',Person,'cats')
 
-        # N to N relationship
-        relate({Person},'cats_to_feed',{Cat},'people_who_feed_me')
-        # this is equivalent to the following function mapping
-        forward_mapping(Person,'cats_to_feed',{Cat})
-        inverse_mapping(Cat,'people_who_feed_me',{Person})
+    # N to N relationship
+    relate({Person},'cats_to_feed',{Cat},'people_who_feed_me')
+    # this is equivalent to the imaginary function definition
+    forward_map(Person,'cats_to_feed',{Cat})
+    inverse_map(Cat,'people_who_feed_me',{Person})
 
-        # N to N relationship between self fields
-        relate({Person},'friends',{Person},'friends')
+    # N to N relationship between self fields
+    relate({Person},'friends',{Person},'friends')
 
-        *Note that not all n-to-n relationships are sensible.
-        '''
+    *Note that not all n-to-n relationships are sensible.
+
+    """
 
     entity1 = _set_relation(entityA, fieldA, entityB)
     if fieldB:
@@ -86,7 +75,7 @@ class _entity_metaclass(type):
 
 
 class Entity(metaclass=_entity_metaclass):
-    ''' An Entity is an entity represented and stored using redis. This class
+    """ An Entity is an entity represented and stored using redis. This class
     is meant to be subclassed using the example template given below. Entities
     are indexed using an id, similar to the primary key in SQL. These ids are
     are contained in a redis SET for book-keeping purposes. There are three
@@ -168,14 +157,17 @@ class Entity(metaclass=_entity_metaclass):
     apollo.relate(Person,'cats_owned',{Cat},'owner')
     # N to N with lookup
     apollo.relate({Person},'cats_to_feed',{Cat},'persons_feeding_me')
-    '''
+
+    """
 
     @classmethod
     def exists(cls, id, db):
+        """ Returns true if an entity with id id exists on the db """
         return db.sismember(cls.prefix + 's', id)
 
     @classmethod
     def create(cls, id, db):
+        """ Create an object with identifier id on the redis client db """
         if isinstance(id, bytes):
             raise TypeError('id must be a string')
         if cls.exists(id, db):
@@ -192,6 +184,10 @@ class Entity(metaclass=_entity_metaclass):
         return cls(id, db)
 
     def delete(self):
+        """ Remove this entity from the db, all associated fields and related
+            fields will also be cleaned up
+
+        """
         for field_name, field_type in self.fields.items():
             if type(field_type) is set:
                 if field_name in self.relations:
@@ -213,26 +209,14 @@ class Entity(metaclass=_entity_metaclass):
 
     @check_field
     def hincrby(self, field, count=1):
+        """ Increment the field by count, field must be declared int """
         if self.fields[field] != int:
             raise TypeError('cannot call hincrby on a non-int field')
         return self._db.hincrby(self.prefix + ':' + self._id, field, count)
 
     @check_field
-    def __getitem__(self, field):
-        if self.fields[field] is set:
-            return self._db.smembers(self.prefix + ':' + self._id
-                                     + ':' + field)
-        elif self.fields[field] is list:
-            pass
-        elif self.fields[field] is tuple:
-            pass
-        else:
-            return self.fields[field](
-                self._db.hget(self.prefix + ':' + self._id, field))
-
-    @check_field
     def hset(self, field, value):
-        ''' Set a hash field equal to value'''
+        """ Set a hash field equal to value """
         # set local value
         assert (self.fields[field] in (str, int, bool, float) or
                 issubclass(self.fields[field], Entity))
@@ -250,14 +234,13 @@ class Entity(metaclass=_entity_metaclass):
                 self._db.hset(other_entity.prefix + ':' + value.id,
                               other_field_name, self.id)
             self.hdel(field)
-            #self._add_foreign_relation(field, value.id)
         if isinstance(value, Entity):
             value = value.id
         self._db.hset(self.prefix + ':' + self._id, field, value)
 
     @check_field
     def hdel(self, field):
-        ''' Delete a hash field and its related fields '''
+        """ Delete a hash field and its related fields """
         assert (self.fields[field] in (str, int, bool, float) or
                 issubclass(self.fields[field], Entity))
 
@@ -277,7 +260,7 @@ class Entity(metaclass=_entity_metaclass):
 
     @check_field
     def hget(self, field):
-        ''' Get a hash field '''
+        """ Get a hash field """
         field_type = self.fields[field]
         if (field_type in (str, int, bool, float)):
             val = self._db.hget(self.prefix + ':' + self._id, field)
@@ -292,7 +275,7 @@ class Entity(metaclass=_entity_metaclass):
 
     @check_field
     def smembers(self, field):
-        ''' Return members of a set '''
+        """ Return members of a set """
         if type(self.fields[field]) != set:
             raise KeyError('called smembers on non-set field')
         set_values = set()
@@ -309,6 +292,7 @@ class Entity(metaclass=_entity_metaclass):
 
     @check_field
     def srem(self, field, *values):
+        """ Remove values from the set field """
         assert type(self.fields[field]) == set
         carbon_copy_values = []
         for value in values:
@@ -334,6 +318,10 @@ class Entity(metaclass=_entity_metaclass):
 
     @check_field
     def sadd(self, field, *values):
+        """ Add values to the field. If the field expects Entities, then values
+        can either be a list of strings, a list of Entities, or a mix of both.
+
+        """
         assert type(self.fields[field]) == set
         for key in self.fields[field]:
             derived_entity = key

@@ -22,7 +22,6 @@ class Cat(apollo.Entity):
 apollo.relate(Person, 'cats', {Cat}, 'owner')
 apollo.relate({Person}, 'cats_to_feed', {Cat}, 'caretakers')
 apollo.relate({Person}, 'friends', {Person}, 'friends')
-# add unit test for best_friend later
 apollo.relate(Person, 'best_friend', Person, 'best_friend')
 apollo.relate(Person, 'single_cat', Cat, 'single_owner')
 
