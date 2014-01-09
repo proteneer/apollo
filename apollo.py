@@ -1,5 +1,4 @@
 from functools import wraps
-import types
 import redis
 
 rc = redis.Redis()
@@ -56,7 +55,7 @@ def relate(entityA, fieldA, entityB, fieldB=None):
 
         # N to N relationship
         relate({Person},'cats_to_feed',{Cat},'people_who_feed_me')
-        # this is equivalent to the following fun
+        # this is equivalent to the following function mapping
         forward_mapping(Person,'cats_to_feed',{Cat})
         inverse_mapping(Cat,'people_who_feed_me',{Person})
 
@@ -173,7 +172,7 @@ class Entity(metaclass=_entity_metaclass):
 
     @classmethod
     def exists(cls, id, db):
-        return db.sismember(cls.prefix+'s', id)
+        return db.sismember(cls.prefix + 's', id)
 
     @classmethod
     def create(cls, id, db):
@@ -181,7 +180,7 @@ class Entity(metaclass=_entity_metaclass):
             raise TypeError('id must be a string')
         if cls.exists(id, db):
             raise KeyError(id, 'already exists')
-        db.sadd(cls.prefix+'s', id)
+        db.sadd(cls.prefix + 's', id)
         return cls(id, db)
 
     @classmethod
@@ -197,14 +196,11 @@ class Entity(metaclass=_entity_metaclass):
             if type(field_type) is set:
                 if field_name in self.relations:
                     for member in self._db.smembers(self.prefix+':'+self.id
-                                                    + ':' + field_name):
-                        self._remove_old_relations(field_name, member)
+                                                    +':'+field_name):
+                        self.srem(field_name, member)
                 self._db.delete(self.prefix+':'+self.id+':'+field_name)
             elif issubclass(field_type, Entity):
-                if field_name in self.relations:
-                    value = self._db.hget(self.prefix+':'+self.id, field_name)
-                    if value:
-                        self._remove_old_relations(field_name, value)
+                self.hdel(field_name)
             elif field_type in (set, int, bool, float):
                 # for lookups possibly in the future
                 pass
@@ -219,101 +215,76 @@ class Entity(metaclass=_entity_metaclass):
     def hincrby(self, field, count=1):
         if self.fields[field] != int:
             raise TypeError('cannot call hincrby on a non-int field')
-        return self._db.hincrby(self.prefix+':'+self._id, field, count)
+        return self._db.hincrby(self.prefix + ':' + self._id, field, count)
 
     @check_field
     def __getitem__(self, field):
         if self.fields[field] is set:
-            return self._db.smembers(self.prefix+':'+self._id+':'+field)
+            return self._db.smembers(self.prefix + ':' + self._id
+                                     + ':' + field)
         elif self.fields[field] is list:
             pass
         elif self.fields[field] is tuple:
             pass
         else:
             return self.fields[field](
-                self._db.hget(self.prefix+':'+self._id, field))
-
-    def _remove_old_relations(self, field, value):
-        ''' cleans up the relations related to the field when trying to
-            set/sadd value '''
-        other_entity = self.relations[field][0]
-        other_field_name = self.relations[field][1]
-        other_field_type = other_entity.fields[other_field_name]
-
-        if type(self.fields[field]) is set:
-            # N to N
-            if type(other_field_type) is set:
-                self._db.srem(other_entity.prefix + ':' + value + ':' +
-                              other_field_name, self.id)
-            # N to 1
-            elif issubclass(other_field_type, Entity):
-                old_owner = self._db.hget(other_entity.prefix+':'+value,
-                                          other_field_name)
-                if old_owner:
-                    self._db.srem(self.prefix+':'+old_owner+':'+field, value)
-                self._db.hdel(other_entity.prefix+':'+value, other_field_name)
-        else:
-            # 1 to N
-            if type(other_field_type) is set:
-                old_value = self._db.hget(self.prefix+':'+self.id, field)
-                if old_value:
-                    self._db.srem(other_entity.prefix+':'+old_value
-                                  + ':' + other_field_name, self.id)
-            # 1 to 1
-            elif issubclass(other_field_type, Entity):
-                old_owner = self._db.hget(other_entity.prefix+':'+value,
-                                          other_field_name)
-                if old_owner:
-                    self._db.hdel(self.prefix+':'+old_owner, field)
-                self._db.hdel(other_entity.prefix+':'+value, other_field_name)
-
-    def _add_new_relations(self, field, value):
-        other_entity = self.relations[field][0]
-        other_field_name = self.relations[field][1]
-        other_field_type = other_entity.fields[other_field_name]
-        if type(other_field_type) is set:
-            self._db.sadd(other_entity.prefix+':'+value
-                          + ':' + other_field_name, self.id)
-        elif issubclass(other_field_type, Entity):
-            self._db.hset(other_entity.prefix+':'+value, other_field_name,
-                          self.id)
-        else:
-            raise TypeError('Unsupported type')
-
-    def _check_lookup_or_relation(self, field, value):
-        ''' not pipeable '''
-        # set lookup/relations
-        assert type(value) in (str, int, bool)
-        if field in self.lookups:
-            # injective lookup
-            if self.lookups[field]:
-                self._db.hset(field+':'+value, self.prefix, self.id)
-            else:
-                self._db.sadd(field+':'+value+':'+self.prefix, self.id)
-        elif field in self.relations:
-            self._remove_old_relations(field, value)
-            self._add_new_relations(field, value)
+                self._db.hget(self.prefix + ':' + self._id, field))
 
     @check_field
     def hset(self, field, value):
-        ''' Set a hash field.
-        '''
+        ''' Set a hash field equal to value'''
         # set local value
         assert (self.fields[field] in (str, int, bool, float) or
                 issubclass(self.fields[field], Entity))
+        if field in self.relations:
+            assert isinstance(value, Entity)
+            other_entity = self.relations[field][0]
+            other_field_name = self.relations[field][1]
+            other_field_type = other_entity.fields[other_field_name]
+
+            if type(other_field_type) is set:
+                self._db.sadd(other_entity.prefix+':'+value.id+':'+
+                              other_field_name, self.id)
+            elif issubclass(other_field_type, Entity):
+                value.hdel(other_field_name)
+                self._db.hset(other_entity.prefix + ':' + value.id,
+                              other_field_name, self.id)
+            self.hdel(field)
+            #self._add_foreign_relation(field, value.id)
         if isinstance(value, Entity):
             value = value.id
+        self._db.hset(self.prefix + ':' + self._id, field, value)
 
-        self._check_lookup_or_relation(field, value)
-        self._db.hset(self.prefix+':'+self._id, field, value)
+    @check_field
+    def hdel(self, field):
+        ''' Delete a hash field and its related fields '''
+        assert (self.fields[field] in (str, int, bool, float) or
+                issubclass(self.fields[field], Entity))
+
+        if issubclass(self.fields[field], Entity):
+            other_entity = self.relations[field][0]
+            other_field_name = self.relations[field][1]
+            other_field_type = other_entity.fields[other_field_name]
+            other_entity_id = self._db.hget(self.prefix+':'+self.id, field)
+            if other_entity_id:
+                if type(other_field_type) is set:
+                    self._db.srem(other_entity.prefix+':'+other_entity_id+':'+
+                                  other_field_name, self.id)
+                elif issubclass(other_field_type, Entity):
+                    self._db.hdel(other_entity.prefix+':'+other_entity_id,
+                                  other_field_name)
+        self._db.hdel(self.prefix+':'+self.id, field)
 
     @check_field
     def hget(self, field):
-        ''' Get a hash field
-        '''
+        ''' Get a hash field '''
         field_type = self.fields[field]
         if (field_type in (str, int, bool, float)):
-            return field_type(self._db.hget(self.prefix+':'+self._id, field))
+            val = self._db.hget(self.prefix + ':' + self._id, field)
+            if val:
+                return field_type(val)
+            else:
+                return val
         elif issubclass(field_type, Entity):
             return self._db.hget(self.prefix+':'+self._id, field)
         else:
@@ -325,7 +296,8 @@ class Entity(metaclass=_entity_metaclass):
         if type(self.fields[field]) != set:
             raise KeyError('called smembers on non-set field')
         set_values = set()
-        for member in self._db.smembers(self.prefix+':'+self._id+':'+field):
+        for member in self._db.smembers(self.prefix + ':' + self._id + ':' +
+                                        field):
             for primitive_type in self.fields[field]:
                 if issubclass(primitive_type, Entity):
                     set_values.add(member)
@@ -345,12 +317,20 @@ class Entity(metaclass=_entity_metaclass):
             else:
                 carbon_copy_values.append(value)
 
-        for value in values:
-            if isinstance(value, Entity):
-                value = value.id
-            self._remove_old_relations(field, value)
+        if field in self.relations:
+            for value in carbon_copy_values:
+                other_entity = self.relations[field][0]
+                other_field_name = self.relations[field][1]
+                other_field_type = other_entity.fields[other_field_name]
 
-        self._db.srem(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
+                if type(other_field_type) is set:
+                    self._db.srem(other_entity.prefix+':'+value+':'+
+                                  other_field_name, self.id)
+                elif issubclass(other_field_type, Entity):
+                    self._db.hdel(other_entity.prefix+':'+value,
+                                  other_field_name)
+                self._db.srem(self.prefix+':'+self.id+':'+field, value)
+        #self._db.srem(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 
     @check_field
     def sadd(self, field, *values):
@@ -358,6 +338,7 @@ class Entity(metaclass=_entity_metaclass):
         for key in self.fields[field]:
             derived_entity = key
         carbon_copy_values = []
+        # convert all values to strings first
         for value in values:
             if isinstance(value, derived_entity):
                 carbon_copy_values.append(value.id)
@@ -365,8 +346,19 @@ class Entity(metaclass=_entity_metaclass):
                 carbon_copy_values.append(value)
             else:
                 raise TypeError('Bad sadd type')
-        for value in carbon_copy_values:
-            self._check_lookup_or_relation(field, value)
+
+        if field in self.relations:
+            other_entity = self.relations[field][0]
+            other_field_name = self.relations[field][1]
+            other_field_type = other_entity.fields[other_field_name]
+            for value in carbon_copy_values:
+                if type(other_field_type) is set:
+                    self._db.sadd(other_entity.prefix+':'+value+':'+
+                                  other_field_name, self.id)
+                elif issubclass(other_field_type, Entity):
+                    other_entity(value, self._db).hdel(other_field_name)
+                    self._db.hset(other_entity.prefix+':'+value,
+                                  other_field_name, self.id)
         self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 
     def __init__(self, id, db):

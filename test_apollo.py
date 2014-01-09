@@ -22,12 +22,9 @@ class Cat(apollo.Entity):
 apollo.relate(Person, 'cats', {Cat}, 'owner')
 apollo.relate({Person}, 'cats_to_feed', {Cat}, 'caretakers')
 apollo.relate({Person}, 'friends', {Person}, 'friends')
+# add unit test for best_friend later
+apollo.relate(Person, 'best_friend', Person, 'best_friend')
 apollo.relate(Person, 'single_cat', Cat, 'single_owner')
-
-#print(Person.fields)
-#print(Person.relations)
-#print(Cat.fields)
-#print(Cat.relations)
 
 
 class TestApollo(unittest.TestCase):
@@ -54,13 +51,27 @@ class TestApollo(unittest.TestCase):
         joe.hset('ssn', '123-45-6789')
         self.assertEqual(joe.hget('ssn'), ssn)
 
+    def test_hdel(self):
+        joe = Person.create('joe', self.db)
+        age = 25
+        joe.hset('age', 25)
+        self.assertEqual(joe.hget('age'), age)
+        joe.hdel('age')
+        self.assertEqual(joe.hget('age'), None)
+
+        sphinx = Cat.create('sphinx', self.db)
+        joe.hset('single_cat', sphinx)
+        self.assertEqual(sphinx.hget('single_owner'), 'joe')
+        joe.hdel('single_cat')
+        self.assertEqual(sphinx.hget('single_owner'), None)
+
     def test_one_to_one_relations(self):
         joe = Person.create('joe', self.db)
         sphinx = Cat.create('sphinx', self.db)
         joe.hset('single_cat', sphinx)
         self.assertEqual(joe.hget('single_cat'), 'sphinx')
         self.assertEqual(sphinx.hget('single_owner'), 'joe')
-
+        # change owners
         bob = Person.create('bob', self.db)
         bob.hset('single_cat', sphinx)
         self.assertEqual(bob.hget('single_cat'), 'sphinx')
@@ -129,6 +140,7 @@ class TestApollo(unittest.TestCase):
         self.assertSetEqual(sphinx.smembers('caretakers'), {'joe'})
         self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly'})
 
+    
     def test_self_reference(self):
         joe = Person.create('joe', self.db)
         bob = Person.create('bob', self.db)
@@ -141,6 +153,7 @@ class TestApollo(unittest.TestCase):
         self.assertSetEqual(joe.smembers('friends'), set())
         self.assertSetEqual(bob.smembers('friends'), set())
 
+    
     def test_delete_entity(self):
         joe = Person.create('joe', self.db)
         joe.delete()
