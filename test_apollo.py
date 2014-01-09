@@ -4,6 +4,7 @@ import redis
 import sys
 
 redis_client = redis.Redis(decode_responses=True)
+redis_client.ping()
 
 
 class Person(apollo.Entity):

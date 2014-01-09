@@ -240,11 +240,12 @@ class Entity(metaclass=_entity_metaclass):
 
     @check_field
     def hdel(self, field):
-        """ Delete a hash field and its related fields """
+        """ Delete a hash field and its related fields and lookups """
         assert (self.fields[field] in (str, int, bool, float) or
                 issubclass(self.fields[field], Entity))
 
-        if issubclass(self.fields[field], Entity):
+        if field in self.relations:
+        #if issubclass(self.fields[field], Entity):
             other_entity = self.relations[field][0]
             other_field_name = self.relations[field][1]
             other_field_type = other_entity.fields[other_field_name]
