@@ -244,23 +244,29 @@ class Entity(metaclass=_entity_metaclass):
             other_field_type = other_entity.fields[other_field_name]
 
             if type(other_field_type) is set:
+                print('called!')
                 self._db.sadd(other_entity.prefix+':'+value.id+':'+
                               other_field_name, self.id)
             elif issubclass(other_field_type, Entity):
+                print('called?')
                 # raise?
                 value.hdel(other_field_name)
                 self._db.hset(other_entity.prefix+':'+value.id,
                               other_field_name, self.id)
             self.hdel(field)
         elif field in self.lookups:
-            # injective!
             if self.lookups[field]:
                 # see if this field mapped to something already
                 reference = self.__class__.lookup(field, value, self._db)
+                print('===========REFERENCE==========')
                 if reference:
+                    self_db.hdel()
                     reference.hdel(field)
                 self._db.hset(field+':'+value, self.prefix, self.id)
             else:
+                mapped = self.hget(field)
+                if mapped:
+                    print(mapped,'===========REFERENCE2==========')
                 self._db.sadd(field+':'+value+':'+self.prefix, self.id)
         if isinstance(value, Entity):
             value = value.id
@@ -413,7 +419,8 @@ class Entity(metaclass=_entity_metaclass):
                     # see if this field mapped to something already
                     reference = self.__class__.lookup(field, value, self._db)
                     if reference:
-                        reference.hdel(field)
+                        self._db.srem(self.prefix+':'+reference+':'+field, 
+                                      value)
                     self._db.hset(field+':'+value, self.prefix, self.id)
                 else:
                     self._db.sadd(field+':'+value+':'+self.prefix, self.id)
