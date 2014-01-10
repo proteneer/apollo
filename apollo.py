@@ -243,6 +243,8 @@ class Entity(metaclass=_entity_metaclass):
             other_field_name = self.relations[field][1]
             other_field_type = other_entity.fields[other_field_name]
 
+            self.hdel(field)
+
             if type(other_field_type) is set:
                 print('called!')
                 self._db.sadd(other_entity.prefix+':'+value.id+':'+
