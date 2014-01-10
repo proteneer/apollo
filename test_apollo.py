@@ -39,7 +39,7 @@ class TestApollo(unittest.TestCase):
         cls.db.flushdb()
 
     def tearDown(self):
-        self.db.flushdb()
+        self.assertListEqual(self.db.keys('*'), [])
 
     def test_lookup_1_to_1(self):
         joe = Person.create('joe', self.db)
@@ -56,6 +56,8 @@ class TestApollo(unittest.TestCase):
 
         bob.delete()
         self.assertEqual(Person.lookup('ssn', '234-56-7890', self.db), None)
+
+        joe.delete()
 
     def test_lookup_n_to_1(self):
         joe = Person.create('joe', self.db)
@@ -91,6 +93,7 @@ class TestApollo(unittest.TestCase):
         joe.hset('age', 25)
         joe.hincrby('age')
         self.assertEqual(joe.hget('age'), 26)
+        joe.delete()
 
     def test_hset_hget(self):
         joe = Person.create('joe', self.db)
@@ -100,6 +103,7 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(joe.hget('age'), age)
         joe.hset('ssn', '123-45-6789')
         self.assertEqual(joe.hget('ssn'), ssn)
+        joe.delete()
 
     def test_hdel(self):
         joe = Person.create('joe', self.db)
@@ -115,6 +119,9 @@ class TestApollo(unittest.TestCase):
         joe.hdel('single_cat')
         self.assertEqual(sphinx.hget('single_owner'), None)
 
+        joe.delete()
+        sphinx.delete()
+
     def test_srem(self):
         joe = Person.create('joe', db=self.db)
         joe.sadd('emails', 'joe@gmail.com')
@@ -123,6 +130,8 @@ class TestApollo(unittest.TestCase):
                                                   'joe@hotmail.com'})
         joe.srem('emails', 'joe@gmail.com')
         self.assertEqual(joe.smembers('emails'), {'joe@hotmail.com'})
+
+        joe.delete()
 
     def test_one_to_one_relations(self):
         joe = Person.create('joe', self.db)
@@ -144,6 +153,10 @@ class TestApollo(unittest.TestCase):
 
         polly.delete()
         self.assertEqual(bob.hget('single_cat'), None)
+
+        joe.delete()
+        sphinx.delete()
+        bob.delete()
 
     def test_one_to_n_relations(self):
         joe = Person.create('joe', self.db)
@@ -171,6 +184,11 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(bob.smembers('cats'), {'polly'})
         self.assertEqual(sphinx.hget('owner'), None)
 
+        joe.delete()
+        sphinx.delete()
+        bob.delete()
+        polly.delete()
+
     def test_remove_item(self):
         joe = Person.create('joe', self.db)
         sphinx = Cat.create('sphinx', self.db)
@@ -179,6 +197,9 @@ class TestApollo(unittest.TestCase):
         joe.srem('cats', sphinx)
         self.assertEqual(joe.smembers('cats'), set())
         self.assertEqual(sphinx.hget('owner'), None)
+
+        joe.delete()
+        sphinx.delete()
 
     def test_n_to_n_relations(self):
         joe = Person.create('joe', self.db)
@@ -203,6 +224,11 @@ class TestApollo(unittest.TestCase):
         self.assertSetEqual(sphinx.smembers('caretakers'), {'joe'})
         self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly'})
 
+        joe.delete()
+        bob.delete()
+        sphinx.delete()
+        polly.delete()
+
     def test_self_1_to_1(self):
         joe = Person.create('joe', self.db)
         bob = Person.create('bob', self.db)
@@ -213,6 +239,8 @@ class TestApollo(unittest.TestCase):
 
         joe.delete()
         self.assertEqual(bob.hget('best_friend'), None)
+
+        bob.delete()
 
     def test_self_n_to_n(self):
         joe = Person.create('joe', self.db)
@@ -225,6 +253,9 @@ class TestApollo(unittest.TestCase):
         joe.srem('friends', bob)
         self.assertSetEqual(joe.smembers('friends'), set())
         self.assertSetEqual(bob.smembers('friends'), set())
+
+        joe.delete()
+        bob.delete()
 
     def test_delete_entity(self):
         joe = Person.create('joe', self.db)
@@ -260,11 +291,7 @@ class TestApollo(unittest.TestCase):
         joe.zrem('tasks', 'drink')
         self.assertListEqual(joe.zrange('tasks', 0, -1), ['eat', 'sleep'])
 
-    @classmethod
-    def tearDownClass(cls):
-        #assert(cls.db.keys('*') == [])
-        #cls.db.shutdown()
-        pass
+        joe.delete()
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromModule(sys.modules[__name__])
