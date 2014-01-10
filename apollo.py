@@ -237,20 +237,19 @@ class Entity(metaclass=_entity_metaclass):
         # set local value
         assert (self.fields[field] in (str, int, bool, float) or
                 issubclass(self.fields[field], Entity))
+
+        # clean up this field first since it can only be bound to a single
+        # object hash field (implicitly).
+        self.hdel(field)
         if field in self.relations:
             assert isinstance(value, Entity)
             other_entity = self.relations[field][0]
             other_field_name = self.relations[field][1]
             other_field_type = other_entity.fields[other_field_name]
-
-            self.hdel(field)
-
             if type(other_field_type) is set:
-                print('called!')
                 self._db.sadd(other_entity.prefix+':'+value.id+':'+
                               other_field_name, self.id)
             elif issubclass(other_field_type, Entity):
-                print('called?')
                 # raise?
                 value.hdel(other_field_name)
                 self._db.hset(other_entity.prefix+':'+value.id,
@@ -258,17 +257,13 @@ class Entity(metaclass=_entity_metaclass):
             self.hdel(field)
         elif field in self.lookups:
             if self.lookups[field]:
-                # see if this field mapped to something already
+                # see if this field is mapped to something already
                 reference = self.__class__.lookup(field, value, self._db)
-                print('===========REFERENCE==========')
                 if reference:
-                    self_db.hdel()
-                    reference.hdel(field)
+                    self._db.srem(self.prefix+':'+reference, field,
+                                  value)
                 self._db.hset(field+':'+value, self.prefix, self.id)
             else:
-                mapped = self.hget(field)
-                if mapped:
-                    print(mapped,'===========REFERENCE2==========')
                 self._db.sadd(field+':'+value+':'+self.prefix, self.id)
         if isinstance(value, Entity):
             value = value.id

@@ -41,151 +41,154 @@ class TestApollo(unittest.TestCase):
     def tearDown(self):
         self.assertListEqual(self.db.keys('*'), [])
 
-    # def test_lookup_1_to_1(self):
-    #     joe = Person.create('joe', self.db)
-    #     joe.hset('ssn', '123-45-6789')
-    #     self.assertEqual(Person.lookup('ssn', '123-45-6789', self.db), 'joe')
+    def test_lookup_1_to_1(self):
+        joe = Person.create('joe', self.db)
+        joe.hset('ssn', '123-45-6789')
+        self.assertEqual(Person.lookup('ssn', '123-45-6789', self.db), 'joe')
 
-    #     joe.hdel('ssn')
-    #     self.assertEqual(joe.hget('ssn'), None)
-    #     self.assertEqual(Person.lookup('ssn', '123-45-6789', self.db), None)
+        joe.hdel('ssn')
+        self.assertEqual(joe.hget('ssn'), None)
+        self.assertEqual(Person.lookup('ssn', '123-45-6789', self.db), None)
 
-    #     bob = Person.create('bob', self.db)
-    #     bob.hset('ssn', '234-56-7890')
-    #     self.assertEqual(Person.lookup('ssn', '234-56-7890', self.db), 'bob')
+        bob = Person.create('bob', self.db)
+        bob.hset('ssn', '234-56-7890')
+        self.assertEqual(Person.lookup('ssn', '234-56-7890', self.db), 'bob')
 
-    #     bob.delete()
-    #     self.assertEqual(Person.lookup('ssn', '234-56-7890', self.db), None)
+        bob.delete()
+        self.assertEqual(Person.lookup('ssn', '234-56-7890', self.db), None)
 
-    #     joe.delete()
+        joe.delete()
 
-    # def test_lookup_n_to_1(self):
-    #     joe = Person.create('joe', self.db)
-    #     joe.hset('favorite_food', 'pizza')
-    #     bob = Person.create('bob', self.db)
-    #     bob.hset('favorite_food', 'pizza')
-    #     self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
-    #                         {'joe', 'bob'})
+    def test_lookup_n_to_1(self):
+        joe = Person.create('joe', self.db)
+        joe.hset('favorite_food', 'pizza')
+        bob = Person.create('bob', self.db)
+        bob.hset('favorite_food', 'pizza')
+        self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
+                            {'joe', 'bob'})
 
-    #     bob.delete()
-    #     self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
-    #                         {'joe'})
+        bob.delete()
+        self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
+                            {'joe'})
 
-    #     joe.delete()
-    #     self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
-    #                         set())
+        joe.delete()
+        self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
+                            set())
 
-    # def test_lookup_n_to_1_override(self):
-    #     joe = Person.create('joe', self.db)
-    #     joe.hset('favorite_food', 'pizza')
-    #     bob = Person.create('bob', self.db)
-    #     bob.hset('favorite_food', 'pizza')
-    #     self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
-    #                         {'joe', 'bob'})
+    def test_lookup_n_to_1_override(self):
+        joe = Person.create('joe', self.db)
+        joe.hset('favorite_food', 'pizza')
+        bob = Person.create('bob', self.db)
+        bob.hset('favorite_food', 'pizza')
+        self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
+                            {'joe', 'bob'})
 
-    #     bob.hset('favorite_food', 'hotdog')
-    #     self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
-    #                         {'joe'})
-    #     self.assertSetEqual(Person.lookup('favorite_food', 'hotdog', self.db),
-    #                         {'bob'})
+        bob.hset('favorite_food', 'hotdog')
+        self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
+                            {'joe'})
+        self.assertSetEqual(Person.lookup('favorite_food', 'hotdog', self.db),
+                            {'bob'})
 
-    # def test_lookup_1_to_n(self):
-    #     joe = Person.create('joe', self.db)
-    #     joe.sadd('emails', 'joe@gmail.com')
-    #     joe.sadd('emails', 'joe@hotmail.com')
-    #     self.assertEqual(Person.lookup('emails', 'joe@gmail.com', self.db),
-    #                      'joe')
-    #     self.assertEqual(Person.lookup('emails', 'joe@hotmail.com', self.db),
-    #                      'joe')
-    #     joe.srem('emails', 'joe@gmail.com')
-    #     self.assertEqual(Person.lookup('emails', 'joe@gmail.com', self.db),
-    #                      None)
+        joe.delete()
+        bob.delete()
 
-    #     joe.delete()
-    #     self.assertEqual(Person.lookup('emails', 'joe@hotmail.com', self.db),
-    #                      None)
+    def test_lookup_1_to_n(self):
+        joe = Person.create('joe', self.db)
+        joe.sadd('emails', 'joe@gmail.com')
+        joe.sadd('emails', 'joe@hotmail.com')
+        self.assertEqual(Person.lookup('emails', 'joe@gmail.com', self.db),
+                         'joe')
+        self.assertEqual(Person.lookup('emails', 'joe@hotmail.com', self.db),
+                         'joe')
+        joe.srem('emails', 'joe@gmail.com')
+        self.assertEqual(Person.lookup('emails', 'joe@gmail.com', self.db),
+                         None)
 
-    #     eve = Person.create('eve', self.db)
-    #     eve.sadd('emails', 'eve@gmail.com')
+        joe.delete()
+        self.assertEqual(Person.lookup('emails', 'joe@hotmail.com', self.db),
+                         None)
 
-    #     bob = Person.create('bob', self.db)
-    #     bob.sadd('emails', 'eve@gmail.com')
+        eve = Person.create('eve', self.db)
+        eve.sadd('emails', 'eve@gmail.com')
 
-    #     self.assertEqual(Person.lookup('emails', 'eve@gmail.com', self.db),
-    #                      'bob')
+        bob = Person.create('bob', self.db)
+        bob.sadd('emails', 'eve@gmail.com')
 
-    #     eve.delete()
-    #     bob.delete()
+        self.assertEqual(Person.lookup('emails', 'eve@gmail.com', self.db),
+                         'bob')
 
-    # def test_hincrby(self):
-    #     joe = Person.create('joe', self.db)
-    #     joe.hset('age', 25)
-    #     joe.hincrby('age')
-    #     self.assertEqual(joe.hget('age'), 26)
-    #     joe.delete()
+        eve.delete()
+        bob.delete()
 
-    # def test_hset_hget(self):
-    #     joe = Person.create('joe', self.db)
-    #     age = 25
-    #     ssn = '123-45-6789'
-    #     joe.hset('age', 25)
-    #     self.assertEqual(joe.hget('age'), age)
-    #     joe.hset('ssn', '123-45-6789')
-    #     self.assertEqual(joe.hget('ssn'), ssn)
-    #     joe.delete()
+    def test_hincrby(self):
+        joe = Person.create('joe', self.db)
+        joe.hset('age', 25)
+        joe.hincrby('age')
+        self.assertEqual(joe.hget('age'), 26)
+        joe.delete()
 
-    # def test_hdel(self):
-    #     joe = Person.create('joe', self.db)
-    #     age = 25
-    #     joe.hset('age', 25)
-    #     self.assertEqual(joe.hget('age'), age)
-    #     joe.hdel('age')
-    #     self.assertEqual(joe.hget('age'), None)
+    def test_hset_hget(self):
+        joe = Person.create('joe', self.db)
+        age = 25
+        ssn = '123-45-6789'
+        joe.hset('age', 25)
+        self.assertEqual(joe.hget('age'), age)
+        joe.hset('ssn', '123-45-6789')
+        self.assertEqual(joe.hget('ssn'), ssn)
+        joe.delete()
 
-    #     sphinx = Cat.create('sphinx', self.db)
-    #     joe.hset('single_cat', sphinx)
-    #     self.assertEqual(sphinx.hget('single_owner'), 'joe')
-    #     joe.hdel('single_cat')
-    #     self.assertEqual(sphinx.hget('single_owner'), None)
+    def test_hdel(self):
+        joe = Person.create('joe', self.db)
+        age = 25
+        joe.hset('age', 25)
+        self.assertEqual(joe.hget('age'), age)
+        joe.hdel('age')
+        self.assertEqual(joe.hget('age'), None)
 
-    #     joe.delete()
-    #     sphinx.delete()
+        sphinx = Cat.create('sphinx', self.db)
+        joe.hset('single_cat', sphinx)
+        self.assertEqual(sphinx.hget('single_owner'), 'joe')
+        joe.hdel('single_cat')
+        self.assertEqual(sphinx.hget('single_owner'), None)
 
-    # def test_srem(self):
-    #     joe = Person.create('joe', db=self.db)
-    #     joe.sadd('emails', 'joe@gmail.com')
-    #     joe.sadd('emails', 'joe@hotmail.com')
-    #     self.assertEqual(joe.smembers('emails'), {'joe@gmail.com',
-    #                                               'joe@hotmail.com'})
-    #     joe.srem('emails', 'joe@gmail.com')
-    #     self.assertEqual(joe.smembers('emails'), {'joe@hotmail.com'})
+        joe.delete()
+        sphinx.delete()
 
-    #     joe.delete()
+    def test_srem(self):
+        joe = Person.create('joe', db=self.db)
+        joe.sadd('emails', 'joe@gmail.com')
+        joe.sadd('emails', 'joe@hotmail.com')
+        self.assertEqual(joe.smembers('emails'), {'joe@gmail.com',
+                                                  'joe@hotmail.com'})
+        joe.srem('emails', 'joe@gmail.com')
+        self.assertEqual(joe.smembers('emails'), {'joe@hotmail.com'})
 
-    # def test_one_to_one_relations(self):
-    #     joe = Person.create('joe', self.db)
-    #     sphinx = Cat.create('sphinx', self.db)
-    #     joe.hset('single_cat', sphinx)
-    #     self.assertEqual(joe.hget('single_cat'), 'sphinx')
-    #     self.assertEqual(sphinx.hget('single_owner'), 'joe')
-    #     # change owners
-    #     bob = Person.create('bob', self.db)
-    #     bob.hset('single_cat', sphinx)
-    #     self.assertEqual(bob.hget('single_cat'), 'sphinx')
-    #     self.assertEqual(sphinx.hget('single_owner'), 'bob')
-    #     self.assertEqual(joe.hget('single_cat'), None)
+        joe.delete()
 
-    #     polly = Cat.create('polly', self.db)
-    #     polly.hset('single_owner', bob)
-    #     self.assertEqual(bob.hget('single_cat'), 'polly')
-    #     self.assertEqual(sphinx.hget('single_owner'), None)
+    def test_one_to_one_relations(self):
+        joe = Person.create('joe', self.db)
+        sphinx = Cat.create('sphinx', self.db)
+        joe.hset('single_cat', sphinx)
+        self.assertEqual(joe.hget('single_cat'), 'sphinx')
+        self.assertEqual(sphinx.hget('single_owner'), 'joe')
+        # change owners
+        bob = Person.create('bob', self.db)
+        bob.hset('single_cat', sphinx)
+        self.assertEqual(bob.hget('single_cat'), 'sphinx')
+        self.assertEqual(sphinx.hget('single_owner'), 'bob')
+        self.assertEqual(joe.hget('single_cat'), None)
 
-    #     polly.delete()
-    #     self.assertEqual(bob.hget('single_cat'), None)
+        polly = Cat.create('polly', self.db)
+        polly.hset('single_owner', bob)
+        self.assertEqual(bob.hget('single_cat'), 'polly')
+        self.assertEqual(sphinx.hget('single_owner'), None)
 
-    #     joe.delete()
-    #     sphinx.delete()
-    #     bob.delete()
+        polly.delete()
+        self.assertEqual(bob.hget('single_cat'), None)
+
+        joe.delete()
+        sphinx.delete()
+        bob.delete()
 
     def test_one_to_n_relations(self):
         joe = Person.create('joe', self.db)
@@ -219,109 +222,109 @@ class TestApollo(unittest.TestCase):
         bob.delete()
         polly.delete()
 
-    # def test_remove_item(self):
-    #     joe = Person.create('joe', self.db)
-    #     sphinx = Cat.create('sphinx', self.db)
-    #     sphinx.hset('owner', joe)
-    #     # test deletion
-    #     joe.srem('cats', sphinx)
-    #     self.assertEqual(joe.smembers('cats'), set())
-    #     self.assertEqual(sphinx.hget('owner'), None)
+    def test_remove_item(self):
+        joe = Person.create('joe', self.db)
+        sphinx = Cat.create('sphinx', self.db)
+        sphinx.hset('owner', joe)
+        # test deletion
+        joe.srem('cats', sphinx)
+        self.assertEqual(joe.smembers('cats'), set())
+        self.assertEqual(sphinx.hget('owner'), None)
 
-    #     joe.delete()
-    #     sphinx.delete()
+        joe.delete()
+        sphinx.delete()
 
-    # def test_n_to_n_relations(self):
-    #     joe = Person.create('joe', self.db)
-    #     bob = Person.create('bob', self.db)
-    #     sphinx = Cat.create('sphinx', self.db)
-    #     polly = Cat.create('polly', self.db)
+    def test_n_to_n_relations(self):
+        joe = Person.create('joe', self.db)
+        bob = Person.create('bob', self.db)
+        sphinx = Cat.create('sphinx', self.db)
+        polly = Cat.create('polly', self.db)
 
-    #     sphinx.sadd('caretakers', joe)
-    #     polly.sadd('caretakers', bob)
-    #     self.assertSetEqual(sphinx.smembers('caretakers'), {'joe'})
-    #     self.assertSetEqual(polly.smembers('caretakers'), {'bob'})
-    #     self.assertSetEqual(joe.smembers('cats_to_feed'), {'sphinx'})
-    #     self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly'})
+        sphinx.sadd('caretakers', joe)
+        polly.sadd('caretakers', bob)
+        self.assertSetEqual(sphinx.smembers('caretakers'), {'joe'})
+        self.assertSetEqual(polly.smembers('caretakers'), {'bob'})
+        self.assertSetEqual(joe.smembers('cats_to_feed'), {'sphinx'})
+        self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly'})
 
-    #     sphinx.sadd('caretakers', bob)
-    #     self.assertSetEqual(joe.smembers('cats_to_feed'), {'sphinx'})
-    #     self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly', 'sphinx'})
-    #     self.assertSetEqual(polly.smembers('caretakers'), {'bob'})
-    #     self.assertSetEqual(sphinx.smembers('caretakers'), {'joe', 'bob'})
+        sphinx.sadd('caretakers', bob)
+        self.assertSetEqual(joe.smembers('cats_to_feed'), {'sphinx'})
+        self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly', 'sphinx'})
+        self.assertSetEqual(polly.smembers('caretakers'), {'bob'})
+        self.assertSetEqual(sphinx.smembers('caretakers'), {'joe', 'bob'})
 
-    #     sphinx.srem('caretakers', bob)
-    #     self.assertSetEqual(sphinx.smembers('caretakers'), {'joe'})
-    #     self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly'})
+        sphinx.srem('caretakers', bob)
+        self.assertSetEqual(sphinx.smembers('caretakers'), {'joe'})
+        self.assertSetEqual(bob.smembers('cats_to_feed'), {'polly'})
 
-    #     joe.delete()
-    #     bob.delete()
-    #     sphinx.delete()
-    #     polly.delete()
+        joe.delete()
+        bob.delete()
+        sphinx.delete()
+        polly.delete()
 
-    # def test_self_1_to_1(self):
-    #     joe = Person.create('joe', self.db)
-    #     bob = Person.create('bob', self.db)
+    def test_self_1_to_1(self):
+        joe = Person.create('joe', self.db)
+        bob = Person.create('bob', self.db)
 
-    #     joe.hset('best_friend', bob)
-    #     self.assertEqual(joe.hget('best_friend'), 'bob')
-    #     self.assertEqual(bob.hget('best_friend'), 'joe')
+        joe.hset('best_friend', bob)
+        self.assertEqual(joe.hget('best_friend'), 'bob')
+        self.assertEqual(bob.hget('best_friend'), 'joe')
 
-    #     joe.delete()
-    #     self.assertEqual(bob.hget('best_friend'), None)
+        joe.delete()
+        self.assertEqual(bob.hget('best_friend'), None)
 
-    #     bob.delete()
+        bob.delete()
 
-    # def test_self_n_to_n(self):
-    #     joe = Person.create('joe', self.db)
-    #     bob = Person.create('bob', self.db)
+    def test_self_n_to_n(self):
+        joe = Person.create('joe', self.db)
+        bob = Person.create('bob', self.db)
 
-    #     joe.sadd('friends', bob)
-    #     self.assertSetEqual(joe.smembers('friends'), {'bob'})
-    #     self.assertSetEqual(bob.smembers('friends'), {'joe'})
+        joe.sadd('friends', bob)
+        self.assertSetEqual(joe.smembers('friends'), {'bob'})
+        self.assertSetEqual(bob.smembers('friends'), {'joe'})
 
-    #     joe.srem('friends', bob)
-    #     self.assertSetEqual(joe.smembers('friends'), set())
-    #     self.assertSetEqual(bob.smembers('friends'), set())
+        joe.srem('friends', bob)
+        self.assertSetEqual(joe.smembers('friends'), set())
+        self.assertSetEqual(bob.smembers('friends'), set())
 
-    #     joe.delete()
-    #     bob.delete()
+        joe.delete()
+        bob.delete()
 
-    # def test_delete_entity(self):
-    #     joe = Person.create('joe', self.db)
-    #     joe.delete()
-    #     self.assertListEqual(self.db.keys('*'), [])
+    def test_delete_entity(self):
+        joe = Person.create('joe', self.db)
+        joe.delete()
+        self.assertListEqual(self.db.keys('*'), [])
 
-    #     joe = Person.create('joe', self.db)
-    #     sphinx = Cat.create('sphinx', self.db)
-    #     polly = Cat.create('polly', self.db)
+        joe = Person.create('joe', self.db)
+        sphinx = Cat.create('sphinx', self.db)
+        polly = Cat.create('polly', self.db)
 
-    #     joe.sadd('cats', sphinx)
-    #     joe.sadd('cats', polly)
-    #     self.assertSetEqual(joe.smembers('cats'), {'sphinx', 'polly'})
+        joe.sadd('cats', sphinx)
+        joe.sadd('cats', polly)
+        self.assertSetEqual(joe.smembers('cats'), {'sphinx', 'polly'})
 
-    #     polly.delete()
-    #     self.assertSetEqual(joe.smembers('cats'), {'sphinx'})
-    #     self.assertEqual(sphinx.hget('owner'), 'joe')
+        polly.delete()
+        self.assertSetEqual(joe.smembers('cats'), {'sphinx'})
+        self.assertEqual(sphinx.hget('owner'), 'joe')
 
-    #     joe.delete()
-    #     self.assertEqual(sphinx.hget('owner'), None)
-    #     self.assertListEqual(self.db.keys('*'), ['cats'])
+        joe.delete()
+        self.assertEqual(sphinx.hget('owner'), None)
+        self.assertListEqual(self.db.keys('*'), ['cats'])
 
-    #     sphinx.delete()
-    #     self.assertListEqual(self.db.keys('*'), [])
+        sphinx.delete()
+        self.assertListEqual(self.db.keys('*'), [])
 
-    # def test_basic_sorted_set(self):
-    #     joe = Person.create('joe', self.db)
-    #     joe.zadd('tasks', 'sleep', 5)
-    #     joe.zadd('tasks', 'eat', 1)
-    #     joe.zadd('tasks', 'drink', 3)
-    #     self.assertListEqual(joe.zrange('tasks', 0, -1),
-    #                          ['eat', 'drink', 'sleep'])
-    #     joe.zrem('tasks', 'drink')
-    #     self.assertListEqual(joe.zrange('tasks', 0, -1), ['eat', 'sleep'])
+    def test_basic_sorted_set(self):
+        joe = Person.create('joe', self.db)
+        joe.zadd('tasks', 'sleep', 5)
+        joe.zadd('tasks', 'eat', 1)
+        joe.zadd('tasks', 'drink', 3)
+        self.assertListEqual(joe.zrange('tasks', 0, -1),
+                             ['eat', 'drink', 'sleep'])
+        joe.zrem('tasks', 'drink')
+        self.assertListEqual(joe.zrange('tasks', 0, -1), ['eat', 'sleep'])
 
-    #     joe.delete()
+        joe.delete()
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromModule(sys.modules[__name__])
