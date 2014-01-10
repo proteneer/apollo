@@ -206,7 +206,7 @@ class Entity(metaclass=_entity_metaclass):
         """
         for field_name, field_type in self.fields.items():
             if type(field_type) is set:
-                if field_name in self.relations:
+                if field_name in self.relations or field_name in self.lookups:
                     for member in self._db.smembers(self.prefix+':'+self.id
                                                     +':'+field_name):
                         self.srem(field_name, member)
@@ -352,6 +352,17 @@ class Entity(metaclass=_entity_metaclass):
                 elif issubclass(other_field_type, Entity):
                     self._db.hdel(other_entity.prefix+':'+value,
                                   other_field_name)
+        elif field in self.lookups:
+            for value in carbon_copy_values:
+                if self.lookups[field]:
+                    # see if this field mapped to something already
+                    reference = self.__class__.lookup(field, value, self._db)
+                    if reference != self.id:
+                        raise KeyError('Cannot remove something that does not \
+                                        belong to you')
+                    self._db.hdel(field+':'+value, self.prefix, self.id)
+                else:
+                    self._db.srem(field+':'+value+':'+self.prefix, self.id)
 
         self._db.srem(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 
@@ -396,6 +407,16 @@ class Entity(metaclass=_entity_metaclass):
                     other_entity(value, self._db).hdel(other_field_name)
                     self._db.hset(other_entity.prefix+':'+value,
                                   other_field_name, self.id)
+        elif field in self.lookups:
+            for value in carbon_copy_values:
+                if self.lookups[field]:
+                    # see if this field mapped to something already
+                    reference = self.__class__.lookup(field, value, self._db)
+                    if reference:
+                        reference.hdel(field)
+                    self._db.hset(field+':'+value, self.prefix, self.id)
+                else:
+                    self._db.sadd(field+':'+value+':'+self.prefix, self.id)
 
         self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 

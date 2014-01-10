@@ -23,6 +23,7 @@ class Cat(apollo.Entity):
 
 Person.add_lookup('ssn')
 Person.add_lookup('favorite_food', injective=False)
+Person.add_lookup('emails')
 
 apollo.relate(Person, 'cats', {Cat}, 'owner')
 apollo.relate({Person}, 'cats_to_feed', {Cat}, 'caretakers')
@@ -69,6 +70,21 @@ class TestApollo(unittest.TestCase):
         joe.delete()
         self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
                             set())
+
+    def test_lookup_1_to_n(self):
+        joe = Person.create('joe', self.db)
+        joe.sadd('emails', 'joe@gmail.com')
+        joe.sadd('emails', 'joe@hotmail.com')
+        self.assertEqual(Person.lookup('emails', 'joe@gmail.com', self.db),
+                         'joe')
+        self.assertEqual(Person.lookup('emails', 'joe@hotmail.com', self.db),
+                         'joe')
+        joe.srem('emails', 'joe@gmail.com')
+        self.assertEqual(Person.lookup('emails', 'joe@gmail.com', self.db),
+                         None)
+        joe.delete()
+        self.assertEqual(Person.lookup('emails', 'joe@hotmail.com', self.db),
+                         None)
 
     def test_hincrby(self):
         joe = Person.create('joe', self.db)
