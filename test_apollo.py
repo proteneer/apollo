@@ -11,14 +11,18 @@ class Person(apollo.Entity):
     prefix = 'person'
     fields = {'age': int,
               'ssn': str,
+              'favorite_food': str,
               'emails': {str},
-              'tasks': (str)
+              'tasks': apollo.zset(str),
               }
 
 
 class Cat(apollo.Entity):
     prefix = 'cat'
     fields = {'age': int}
+
+Person.add_lookup('ssn')
+Person.add_lookup('favorite_food', injective=False)
 
 apollo.relate(Person, 'cats', {Cat}, 'owner')
 apollo.relate({Person}, 'cats_to_feed', {Cat}, 'caretakers')
@@ -35,6 +39,36 @@ class TestApollo(unittest.TestCase):
 
     def tearDown(self):
         self.db.flushdb()
+
+    def test_lookup_1_to_1(self):
+        joe = Person.create('joe', self.db)
+        joe.hset('ssn', '123-45-6789')
+        self.assertEqual(Person.lookup('ssn', '123-45-6789', self.db), 'joe')
+
+        joe.hdel('ssn')
+        self.assertEqual(joe.hget('ssn'), None)
+        self.assertEqual(Person.lookup('ssn', '123-45-6789', self.db), None)
+
+        bob = Person.create('bob', self.db)
+        bob.hset('ssn', '234-56-7890')
+        self.assertEqual(Person.lookup('ssn', '234-56-7890', self.db), 'bob')
+
+        bob.delete()
+        self.assertEqual(Person.lookup('ssn', '234-56-7890', self.db), None)
+
+    def test_lookup_n_to_1(self):
+        joe = Person.create('joe', self.db)
+        joe.hset('favorite_food', 'pizza')
+        bob = Person.create('bob', self.db)
+        bob.hset('favorite_food', 'pizza')
+        self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
+                            {'joe', 'bob'})
+        bob.delete()
+        self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
+                            {'joe'})
+        joe.delete()
+        self.assertSetEqual(Person.lookup('favorite_food', 'pizza', self.db),
+                            set())
 
     def test_hincrby(self):
         joe = Person.create('joe', self.db)
@@ -199,6 +233,16 @@ class TestApollo(unittest.TestCase):
 
         sphinx.delete()
         self.assertListEqual(self.db.keys('*'), [])
+
+    def test_basic_sorted_set(self):
+        joe = Person.create('joe', self.db)
+        joe.zadd('tasks', 'sleep', 5)
+        joe.zadd('tasks', 'eat', 1)
+        joe.zadd('tasks', 'drink', 3)
+        self.assertListEqual(joe.zrange('tasks', 0, -1),
+                             ['eat', 'drink', 'sleep'])
+        joe.zrem('tasks', 'drink')
+        self.assertListEqual(joe.zrange('tasks', 0, -1), ['eat', 'sleep'])
 
     @classmethod
     def tearDownClass(cls):

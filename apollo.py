@@ -1,6 +1,12 @@
 from functools import wraps
 
 
+# generic container used to denote zset
+class zset():
+    def __init__(self, primitive):
+        self.primitive = primitive
+
+
 def check_field(func):
     @wraps(func)
     def _wrapper(self_cls, field, *args, **kwargs):
@@ -64,7 +70,6 @@ def relate(entityA, fieldA, entityB, fieldB=None):
 class _entity_metaclass(type):
 
     def __new__(cls, clsname, bases, attrs):
-        # create these only for derived classes of Entity
         if len(bases) > 0:
             mandatory_fields = ('fields', 'relations', 'lookups')
             for field in mandatory_fields:
@@ -177,6 +182,17 @@ class Entity(metaclass=_entity_metaclass):
 
     @classmethod
     def add_lookup(cls, field, injective=True):
+        """ Call this method only after all the relevant Entities have been
+            created since it ensures there are no conflicts. TODO: Entity
+            metaclass can be modified to make the check so add_lookup can be
+            placed wherever.
+
+        """
+        # ensure lookup field is not a prefix for any existing derived Entity
+        for subclass in Entity.__subclasses__():
+            if subclass.prefix == field:
+                raise AttributeError('lookup field cannot be a prefix for \
+                                      any existing entity')
         cls.lookups[field] = injective
 
     @classmethod
@@ -195,11 +211,12 @@ class Entity(metaclass=_entity_metaclass):
                                                     +':'+field_name):
                         self.srem(field_name, member)
                 self._db.delete(self.prefix+':'+self.id+':'+field_name)
+            elif type(field_type) is zset:
+                self._db.delete(self.prefix+':'+self.id+':'+field_name)
             elif issubclass(field_type, Entity):
                 self.hdel(field_name)
-            elif field_type in (set, int, bool, float):
-                # for lookups possibly in the future
-                pass
+            elif field_type in (str, int, bool, float):
+                self.hdel(field_name)
         self._db.delete(self.prefix+':'+self.id)
         self._db.srem(self.prefix+'s', self.id)
 
@@ -230,10 +247,21 @@ class Entity(metaclass=_entity_metaclass):
                 self._db.sadd(other_entity.prefix+':'+value.id+':'+
                               other_field_name, self.id)
             elif issubclass(other_field_type, Entity):
+                # raise?
                 value.hdel(other_field_name)
-                self._db.hset(other_entity.prefix + ':' + value.id,
+                self._db.hset(other_entity.prefix+':'+value.id,
                               other_field_name, self.id)
             self.hdel(field)
+        elif field in self.lookups:
+            # injective!
+            if self.lookups[field]:
+                # see if this field mapped to something already
+                reference = self.__class__.lookup(field, value, self._db)
+                if reference:
+                    reference.hdel(field)
+                self._db.hset(field+':'+value, self.prefix, self.id)
+            else:
+                self._db.sadd(field+':'+value+':'+self.prefix, self.id)
         if isinstance(value, Entity):
             value = value.id
         self._db.hset(self.prefix + ':' + self._id, field, value)
@@ -257,6 +285,17 @@ class Entity(metaclass=_entity_metaclass):
                 elif issubclass(other_field_type, Entity):
                     self._db.hdel(other_entity.prefix+':'+other_entity_id,
                                   other_field_name)
+        elif field in self.lookups:
+            lookup_value = self._db.hget(self.prefix+':'+self.id, field)
+            if lookup_value:
+                # if it is injective, implies mapping to a single hash
+                if self.lookups[field]:
+                    self._db.hdel(field+':'+lookup_value, self.prefix)
+                # lookup maps to many different values
+                else:
+                    self._db.srem(field+':'+lookup_value+':'+self.prefix,
+                                  self.id)
+
         self._db.hdel(self.prefix+':'+self.id, field)
 
     @check_field
@@ -301,7 +340,6 @@ class Entity(metaclass=_entity_metaclass):
                 carbon_copy_values.append(value.id)
             else:
                 carbon_copy_values.append(value)
-
         if field in self.relations:
             for value in carbon_copy_values:
                 other_entity = self.relations[field][0]
@@ -316,6 +354,16 @@ class Entity(metaclass=_entity_metaclass):
                                   other_field_name)
 
         self._db.srem(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
+
+    @classmethod
+    @check_field
+    def lookup(self, field, value, db):
+        assert field in self.lookups
+        # if its injective
+        if self.lookups[field]:
+            return db.hget(field+':'+value, self.prefix)
+        else:
+            return db.smembers(field+':'+value+':'+self.prefix)
 
     @check_field
     def sadd(self, field, *values):
@@ -350,6 +398,26 @@ class Entity(metaclass=_entity_metaclass):
                                   other_field_name, self.id)
 
         self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
+
+    @check_field
+    def zrange(self, field, start, end):
+        assert type(self.fields[field] == zset)
+        return self._db.zrange(self.prefix+':'+self.id+':'+field, start, end)
+
+    @check_field
+    def zadd(self, field, *args, **kwargs):
+        assert type(self.fields[field] == zset)
+        assert not field in self.lookups
+        assert not field in self.relations
+        return self._db.zadd(self.prefix+':'+self.id+':'+field,
+                             *args, **kwargs)
+
+    @check_field
+    def zrem(self, field, *args):
+        assert type(self.fields[field] == zset)
+        assert not field in self.lookups
+        assert not field in self.relations
+        return self._db.zrem(self.prefix+':'+self.id+':'+field, *args)
 
     def __init__(self, id, db):
         self._db = db
