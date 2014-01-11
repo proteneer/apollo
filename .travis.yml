@@ -3,4 +3,5 @@ python:
   - "3.3"
 services:
   - redis-server
-script: python test_apollo.py
+install: "pip install redis"
+script: "python test_apollo.py"
