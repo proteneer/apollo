@@ -278,7 +278,7 @@ class TestApollo(unittest.TestCase):
         try:
             joe.srem('cats', sphinx)
             raise Exception('expected exception to be thrown here')
-        except Exception as e:
+        except Exception:
             pass
         self.assertEqual(joe.smembers('cats'), set())
         self.assertEqual(bob.smembers('cats'), {'sphinx'})
@@ -368,9 +368,15 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(joe.hget('best_friend'), 'bob')
         self.assertEqual(bob.hget('best_friend'), 'joe')
 
-        joe.delete()
-        self.assertEqual(bob.hget('best_friend'), None)
+        eve = Person.create('eve', self.db)
+        eve.hset('best_friend', bob)
+        self.assertEqual(joe.hget('best_friend'), None)
+        self.assertEqual(eve.hget('best_friend'), 'bob')
+        self.assertEqual(bob.hget('best_friend'), 'eve')
 
+        joe.delete()
+        eve.delete()
+        self.assertEqual(bob.hget('best_friend'), None)
         bob.delete()
 
     def test_self_n_to_n(self):
