@@ -350,8 +350,10 @@ class Entity(metaclass=_entity_metaclass):
             else:
                 carbon_copy_values.append(value)
 
-        if field in self.relations:
-            for value in carbon_copy_values:
+        for value in carbon_copy_values:
+            if field in self.relations:
+                if not self.sismember(field, value):
+                    raise ValueError(value+' is not in '+self.id+'\'s '+field)
                 other_entity = self.relations[field][0]
                 other_field_name = self.relations[field][1]
                 other_field_type = other_entity.fields[other_field_name]
@@ -362,8 +364,7 @@ class Entity(metaclass=_entity_metaclass):
                 elif issubclass(other_field_type, Entity):
                     self._db.hdel(other_entity.prefix+':'+value,
                                   other_field_name)
-        elif field in self.lookups:
-            for value in carbon_copy_values:
+            elif field in self.lookups:
                 if not self.sismember(field, value):
                     raise ValueError(value+' is not in '+self.id+'\'s '+field)
                 if self.lookups[field]:

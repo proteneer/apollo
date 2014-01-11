@@ -273,10 +273,16 @@ class TestApollo(unittest.TestCase):
         bob.sadd('cats', sphinx)
         self.assertEqual(joe.smembers('cats'), set())
         self.assertEqual(bob.smembers('cats'), {'sphinx'})
+        self.assertEqual(sphinx.hget('owner'), 'bob')
 
-        joe.srem('cats', sphinx)
+        try:
+            joe.srem('cats', sphinx)
+            raise Exception('expected exception to be thrown here')
+        except Exception as e:
+            pass
         self.assertEqual(joe.smembers('cats'), set())
         self.assertEqual(bob.smembers('cats'), {'sphinx'})
+        self.assertEqual(sphinx.hget('owner'), 'bob')
 
         sphinx.delete()
         joe.delete()
