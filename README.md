@@ -22,7 +22,7 @@ class Person(apollo.Entity):
     # favorite_food lookups return multiple persons
     Person.add_lookup('favorite_food', injective=False)
 
-joe = Person.create('joe', db)  # Create joe on the db
+joe = Person.create('joe', db)  # create joe on the db
 joe.hset('ssn', '123-45-6789')  # set the ssn of joe
 joe.hget('ssn')  # get the ssn of joe
 joe.hset('bad_field')  # bad fields raise exceptions
@@ -64,4 +64,7 @@ polly.hset('owner', joe)
 polly.hget('owner')  # returns 'joe'
 joe.smembers('cats')  # returns {'sphinx', 'polly'}
 
+bob = Person.create('bob', db)
+bob.sadd('friends', 'joe')  # set joe to be bob's friend
+joe.smembers('friends')  # bob is now also joe's friend
 ```
