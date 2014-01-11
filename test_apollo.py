@@ -13,7 +13,8 @@ class Person(apollo.Entity):
               'ssn': str,
               'favorite_food': str,
               'emails': {str},
-              'tasks': apollo.zset(str),
+              'favorite_songs': {str},
+              'tasks': apollo.zset(str)
               }
 
 
@@ -24,6 +25,7 @@ class Cat(apollo.Entity):
 Person.add_lookup('ssn')
 Person.add_lookup('favorite_food', injective=False)
 Person.add_lookup('emails')
+Person.add_lookup('favorite_songs', injective=False)
 
 apollo.relate(Person, 'cats', {Cat}, 'owner')
 apollo.relate({Person}, 'cats_to_feed', {Cat}, 'caretakers')
@@ -39,7 +41,17 @@ class TestApollo(unittest.TestCase):
         cls.db.flushdb()
 
     def tearDown(self):
-        self.assertListEqual(self.db.keys('*'), [])
+        if self.db.keys('*') != []:
+            self.db.flushdb()
+            self.assertTrue(0)
+
+    def test_sismember(self):
+        eve = Person.create('eve', self.db)
+        eve.sadd('emails', 'foo@gmail.com', 'bar@gmail.com')
+        self.assertTrue(eve.sismember('emails', 'foo@gmail.com'))
+        self.assertTrue(eve.sismember('emails', 'bar@gmail.com'))
+
+        eve.delete()
 
     def test_lookup_1_to_1(self):
         joe = Person.create('joe', self.db)
@@ -58,6 +70,17 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(Person.lookup('ssn', '234-56-7890', self.db), None)
 
         joe.delete()
+
+    def test_lookup_1_to_1_override(self):
+        joe = Person.create('joe', self.db)
+        joe.hset('ssn', '123-45-6789')
+        bob = Person.create('bob', self.db)
+        bob.hset('ssn', '123-45-6789')
+
+        self.assertEqual(Person.lookup('ssn', '123-45-6789', self.db), 'bob')
+
+        joe.delete()
+        bob.delete()
 
     def test_lookup_n_to_1(self):
         joe = Person.create('joe', self.db)
@@ -100,6 +123,7 @@ class TestApollo(unittest.TestCase):
                          'joe')
         self.assertEqual(Person.lookup('emails', 'joe@hotmail.com', self.db),
                          'joe')
+
         joe.srem('emails', 'joe@gmail.com')
         self.assertEqual(Person.lookup('emails', 'joe@gmail.com', self.db),
                          None)
@@ -108,16 +132,64 @@ class TestApollo(unittest.TestCase):
         self.assertEqual(Person.lookup('emails', 'joe@hotmail.com', self.db),
                          None)
 
+    def test_lookup_1_to_n_override(self):
         eve = Person.create('eve', self.db)
         eve.sadd('emails', 'eve@gmail.com')
 
         bob = Person.create('bob', self.db)
         bob.sadd('emails', 'eve@gmail.com')
+        self.assertEqual(Person.lookup('emails', 'eve@gmail.com', self.db),
+                         'bob')
+
+        # this should do nothing since eve@gmail.com no longer belongs to eve
+        try:
+            eve.srem('emails', 'eve@gmail.com')
+            raise(Exception('Expected an error to be raised here...'))
+        except ValueError:
+            pass
 
         self.assertEqual(Person.lookup('emails', 'eve@gmail.com', self.db),
                          'bob')
 
         eve.delete()
+        bob.delete()
+
+    def test_lookup_1_to_n_switch(self):
+        joe = Person.create('joe', self.db)
+        joe.sadd('emails', 'joe@gmail.com', 'cool_dude@gmail.com')
+
+        bob = Person.create('bob', self.db)
+        bob.sadd('emails', 'cool_dude@gmail.com')
+
+        self.assertEqual(Person.lookup('emails', 'cool_dude@gmail.com',
+                                       self.db), 'bob')
+
+        self.assertEqual(joe.smembers('emails'), {'joe@gmail.com'})
+
+        joe.delete()
+        bob.delete()
+
+    def test_lookup_n_to_n(self):
+        joe = Person.create('joe', self.db)
+        bob = Person.create('bob', self.db)
+
+        joe.sadd('favorite_songs', 'prelude')
+        joe.sadd('favorite_songs', 'nocturne')
+        bob.sadd('favorite_songs', 'nocturne')
+        bob.sadd('favorite_songs', 'concerto')
+
+        self.assertEqual(Person.lookup('favorite_songs', 'nocturne', self.db),
+                         {'joe', 'bob'})
+        self.assertEqual(Person.lookup('favorite_songs', 'prelude', self.db),
+                         {'joe'})
+        self.assertEqual(Person.lookup('favorite_songs', 'concerto', self.db),
+                         {'bob'})
+
+        joe.srem('favorite_songs', 'nocturne')
+        self.assertEqual(Person.lookup('favorite_songs', 'nocturne', self.db),
+                         {'bob'})
+
+        joe.delete()
         bob.delete()
 
     def test_hincrby(self):
@@ -165,7 +237,7 @@ class TestApollo(unittest.TestCase):
 
         joe.delete()
 
-    def test_one_to_one_relations(self):
+    def test_1_to_1_relations(self):
         joe = Person.create('joe', self.db)
         sphinx = Cat.create('sphinx', self.db)
         joe.hset('single_cat', sphinx)
@@ -190,7 +262,27 @@ class TestApollo(unittest.TestCase):
         sphinx.delete()
         bob.delete()
 
-    def test_one_to_n_relations(self):
+    def test_1_to_n_relations_override(self):
+        joe = Person.create('joe', self.db)
+        sphinx = Cat.create('sphinx', self.db)
+        bob = Person.create('bob', self.db)
+
+        joe.sadd('cats', sphinx)
+        self.assertEqual(joe.smembers('cats'), {'sphinx'})
+
+        bob.sadd('cats', sphinx)
+        self.assertEqual(joe.smembers('cats'), set())
+        self.assertEqual(bob.smembers('cats'), {'sphinx'})
+
+        joe.srem('cats', sphinx)
+        self.assertEqual(joe.smembers('cats'), set())
+        self.assertEqual(bob.smembers('cats'), {'sphinx'})
+
+        sphinx.delete()
+        joe.delete()
+        bob.delete()
+
+    def test_1_to_n_relations(self):
         joe = Person.create('joe', self.db)
         sphinx = Cat.create('sphinx', self.db)
         #joe.sadd('cats', sphinx)

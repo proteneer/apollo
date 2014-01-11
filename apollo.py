@@ -240,8 +240,8 @@ class Entity(metaclass=_entity_metaclass):
 
         # clean up this field first since it can only be bound to a single
         # object hash field (implicitly).
-        self.hdel(field)
         if field in self.relations:
+            self.hdel(field)
             assert isinstance(value, Entity)
             other_entity = self.relations[field][0]
             other_field_name = self.relations[field][1]
@@ -256,12 +256,12 @@ class Entity(metaclass=_entity_metaclass):
                               other_field_name, self.id)
             self.hdel(field)
         elif field in self.lookups:
+            self.hdel(field)
             if self.lookups[field]:
                 # see if this field is mapped to something already
                 reference = self.__class__.lookup(field, value, self._db)
                 if reference:
-                    self._db.srem(self.prefix+':'+reference, field,
-                                  value)
+                    self._db.hdel(self.prefix+':'+reference+':'+field, value)
                 self._db.hset(field+':'+value, self.prefix, self.id)
             else:
                 self._db.sadd(field+':'+value+':'+self.prefix, self.id)
@@ -334,6 +334,12 @@ class Entity(metaclass=_entity_metaclass):
         return set_values
 
     @check_field
+    def sismember(self, field, value):
+        if isinstance(value, Entity):
+            value = value.id
+        return self._db.sismember(self.prefix+':'+self.id+':'+field, value)
+
+    @check_field
     def srem(self, field, *values):
         """ Remove values from the set field """
         assert type(self.fields[field]) == set
@@ -343,6 +349,7 @@ class Entity(metaclass=_entity_metaclass):
                 carbon_copy_values.append(value.id)
             else:
                 carbon_copy_values.append(value)
+
         if field in self.relations:
             for value in carbon_copy_values:
                 other_entity = self.relations[field][0]
@@ -357,12 +364,10 @@ class Entity(metaclass=_entity_metaclass):
                                   other_field_name)
         elif field in self.lookups:
             for value in carbon_copy_values:
+                if not self.sismember(field, value):
+                    raise ValueError(value+' is not in '+self.id+'\'s '+field)
                 if self.lookups[field]:
                     # see if this field mapped to something already
-                    reference = self.__class__.lookup(field, value, self._db)
-                    if reference != self.id:
-                        raise KeyError('Cannot remove something that does not \
-                                        belong to you')
                     self._db.hdel(field+':'+value, self.prefix, self.id)
                 else:
                     self._db.srem(field+':'+value+':'+self.prefix, self.id)
