@@ -426,7 +426,7 @@ class Entity(metaclass=_entity_metaclass):
                     # see if this field mapped to something already
                     reference = self.__class__.lookup(field, value, self._db)
                     if reference:
-                        self._db.srem(self.prefix+':'+reference+':'+field, 
+                        self._db.srem(self.prefix+':'+reference+':'+field,
                                       value)
                     self._db.hset(field+':'+value, self.prefix, self.id)
                 else:
@@ -435,9 +435,15 @@ class Entity(metaclass=_entity_metaclass):
         self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 
     @check_field
-    def zrange(self, field, start, end):
+    def zrange(self, field, start, stop):
         assert type(self.fields[field] == zset)
-        return self._db.zrange(self.prefix+':'+self.id+':'+field, start, end)
+        return self._db.zrange(self.prefix+':'+self.id+':'+field, start, stop)
+
+    @check_field
+    def zremrangebyrank(self, field, start, stop):
+        assert type(self.fields[field] == zset)
+        return self._db.zremrangebyrank(self.prefix+':'+self.id+':'+field,
+                                        start, stop)
 
     @check_field
     def zadd(self, field, *args, **kwargs):
@@ -455,6 +461,7 @@ class Entity(metaclass=_entity_metaclass):
         return self._db.zrem(self.prefix+':'+self.id+':'+field, *args)
 
     def __init__(self, id, db):
+        assert type(id) in (str, int)
         self._db = db
         self._id = id
         # overhead
