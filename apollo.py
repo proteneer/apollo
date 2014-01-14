@@ -340,6 +340,10 @@ class Entity(metaclass=_entity_metaclass):
         return self._db.sismember(self.prefix+':'+self.id+':'+field, value)
 
     @check_field
+    def scard(self, field):
+        return self._db.scard(self.prefix+':'+self.id+':'+field)
+
+    @check_field
     def srem(self, field, *values):
         """ Remove values from the set field """
         assert type(self.fields[field]) == set
