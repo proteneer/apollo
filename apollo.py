@@ -11,7 +11,7 @@ def check_field(func):
     @wraps(func)
     def _wrapper(self_cls, field, *args, **kwargs):
         if not field in self_cls.fields:
-            raise TypeError('invalid field')
+            raise TypeError('invalid field: '+field)
         return func(self_cls, field, *args, **kwargs)
     return _wrapper
 
@@ -435,6 +435,11 @@ class Entity(metaclass=_entity_metaclass):
         self._db.sadd(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
 
     @check_field
+    def zscore(self, field, key):
+        assert type(self.fields[field] == zset)
+        return self._db.zscore(self.prefix+':'+self.id+':'+field, key)
+
+    @check_field
     def zrange(self, field, start, stop):
         assert type(self.fields[field] == zset)
         return self._db.zrange(self.prefix+':'+self.id+':'+field, start, stop)
@@ -450,8 +455,8 @@ class Entity(metaclass=_entity_metaclass):
         assert type(self.fields[field] == zset)
         assert not field in self.lookups
         assert not field in self.relations
-        return self._db.zadd(self.prefix+':'+self.id+':'+field,
-                             *args, **kwargs)
+        return self._db.zadd(self.prefix+':'+self.id+':'+field, *args,
+                             **kwargs)
 
     @check_field
     def zrem(self, field, *args):
