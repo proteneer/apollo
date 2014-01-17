@@ -166,9 +166,14 @@ class Entity(metaclass=_entity_metaclass):
     """
 
     @classmethod
+    def members(cls, db):
+        """ List all entities """
+        return db.smembers(cls.prefix+'s')
+
+    @classmethod
     def exists(cls, id, db):
         """ Returns true if an entity with id id exists on the db """
-        return db.sismember(cls.prefix + 's', id)
+        return db.sismember(cls.prefix+'s', id)
 
     @classmethod
     def create(cls, id, db):
