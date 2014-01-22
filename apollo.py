@@ -204,6 +204,16 @@ class Entity(metaclass=_entity_metaclass):
     def instance(cls, id, db):
         return cls(id, db)
 
+    @classmethod
+    @check_field
+    def lookup(self, field, value, db):
+        assert field in self.lookups
+        # if its injective
+        if self.lookups[field]:
+            return db.hget(field+':'+value, self.prefix)
+        else:
+            return db.smembers(field+':'+value+':'+self.prefix)
+
     def delete(self):
         """ Remove this entity from the db, all associated fields and related
             fields will also be cleaned up
@@ -349,6 +359,10 @@ class Entity(metaclass=_entity_metaclass):
         return self._db.scard(self.prefix+':'+self.id+':'+field)
 
     @check_field
+    def srandmember(self, field):
+        return self._db.srandmember(self.prefix+':'+self.id+':'+field)
+
+    @check_field
     def srem(self, field, *values):
         """ Remove values from the set field """
         assert type(self.fields[field]) == set
@@ -383,16 +397,6 @@ class Entity(metaclass=_entity_metaclass):
                     self._db.srem(field+':'+value+':'+self.prefix, self.id)
 
         self._db.srem(self.prefix+':'+self._id+':'+field, *carbon_copy_values)
-
-    @classmethod
-    @check_field
-    def lookup(self, field, value, db):
-        assert field in self.lookups
-        # if its injective
-        if self.lookups[field]:
-            return db.hget(field+':'+value, self.prefix)
-        else:
-            return db.smembers(field+':'+value+':'+self.prefix)
 
     @check_field
     def sadd(self, field, *values):
