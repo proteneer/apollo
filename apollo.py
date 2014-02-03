@@ -363,6 +363,17 @@ class Entity(metaclass=_entity_metaclass):
         return self._db.srandmember(self.prefix+':'+self.id+':'+field)
 
     @check_field
+    def sremall(self, field):
+        """ Empty the set """
+        assert type(self.fields[field]) == set
+
+        if field in self.relations or field in self.lookups:
+            values = list(self.smembers(field))
+            self.srem(field, *values)
+        else:
+            self._db.delete(self.prefix+':'+self._id+':'+field)
+
+    @check_field
     def srem(self, field, *values):
         """ Remove values from the set field """
         assert type(self.fields[field]) == set
